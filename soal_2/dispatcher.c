@@ -46,6 +46,16 @@ void download_file() {
     }
 }
 
+void delShm() {
+    int shmid = shmget(SHM_KEY, sizeof(SharedData), 0666);
+    if (shmid != -1) {
+        shmctl(shmid, IPC_RMID, NULL);
+        printf("Shared memory deleted\n");
+    } else {
+        perror("shmget failed");
+    }
+}
+
 SharedData* init_shared_memory() {
     if (!file_exists(FILE_NAME)) {
         printf("File CSV belum ditemukan. Mengunduh...\n");
@@ -196,6 +206,18 @@ for (int i = 1; i < argc; i++) {
         formtru = 1;
         printTable(shared_data);
         return 0;
+    }
+    else if(argc == 2 && strcmp(argv[i], "-rm") == 0) {
+        delShm();
+        return 0;
+    }
+    else if (strcmp(argv[i], "-deliver") == 0 || strcmp(argv[i], "-status") == 0) {
+        formtru = -1;
+        break;
+    }
+    else if (strcmp(argv[i], "-deliver") == 0 || strcmp(argv[i], "-status") == 0 && i + 1 < argc) {
+        formtru = 1;
+        break;
     }
 
     if ((strcmp(argv[i], "-deliver") == 0 || strcmp(argv[i], "-status") == 0) && i + 1 < argc) {

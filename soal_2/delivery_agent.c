@@ -160,8 +160,7 @@ int main() {
     }
     
     sem_destroy(&sem);
-    int shmid = shmget(SHM_KEY, 0, 0666);
     shmdt(shared_data);
-    shmctl(shmid, IPC_RMID, NULL);
+    
     return 0;
 }
