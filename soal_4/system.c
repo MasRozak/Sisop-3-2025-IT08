@@ -481,7 +481,7 @@ void show_all_dungeons(Dungeon *dungeons) {
                 printf(RED "Invalid dungeon number!\n" RESET);
             } else {
                 printf(YELLOW "Deleting dungeon: %s...\n" RESET, dungeons[del_idx - 1].name);
-                memset(&dungeons[del_idx - 1], 0, sizeof(Dungeon)); // clear data
+                memset(&dungeons[del_idx - 1], 0, sizeof(Dungeon)); 
                 dungeons[del_idx - 1].used = 0;
                 printf(GREEN "Dungeon [%d] has been deleted.\n" RESET, del_idx);
             }
