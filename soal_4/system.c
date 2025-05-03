@@ -342,7 +342,7 @@ int main() {
         printf("  " WHITE "1" BLUE " ⚔️  " WHITE "Show All Hunters" BLUE "                                   \n");
         printf("  " WHITE "2" BLUE " 🏰  " WHITE "Show All Dungeons" BLUE "                                  \n");
         printf("  " WHITE "3" BLUE " 🌟  " WHITE "Generate Dungeon" BLUE "                                   \n");
-        printf("  " WHITE "4" BLUE " 🚫  " WHITE "Ban/Unban Hunter" BLUE "                                   \n");
+        printf("  " WHITE "4" BLUE " 🚫  " WHITE "Ban Hunter" BLUE "                                   \n");
         printf("  " WHITE "5" BLUE " 🔄  " WHITE "Reset Hunter Stats" BLUE "                                 \n");
         printf("  " WHITE "6" BLUE " 🚪  " WHITE "Exit" BLUE "                                               \n");
         printf("╚════════════════════════════════════════════════════════════════╝\n");
