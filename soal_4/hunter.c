@@ -264,7 +264,7 @@ void battle(struct Hunter *self, struct SystemData *data) {
     printf(" " RED "Enemy Power:" RESET " %d                                            \n", target_power);
     printf("                                                                \n");
     
-    if (self_power >= target_power) {
+    if (self_power > target_power) {
         int old_atk = self->atk;
         int old_hp = self->hp;
         int old_def = self->def;
@@ -288,7 +288,7 @@ void battle(struct Hunter *self, struct SystemData *data) {
                self->hp - old_hp, old_hp, self->hp);
         printf("   🛡️  DEF: " BLUE "+%d" RESET " (%d → %d)                                   \n", 
                self->def - old_def, old_def, self->def);
-    } else {
+    } else if (self_power < target_power) {
         for (int i = 0; i < data->num_hunters; i++) {
             if (strcmp(data->hunters[i].username, self->username) == 0) {
                 for (int j = i; j < data->num_hunters - 1; j++) {
@@ -303,6 +303,8 @@ void battle(struct Hunter *self, struct SystemData *data) {
                data->hunters[target].username);
         printf("                                                                \n");
         printf(" " YELLOW "You will need to create a new hunter account." RESET "              \n");
+    } else {
+        printf(" " YELLOW "DRAW! No winner, battle ends in a tie.\n" RESET);
     }
     
     print_footer();
