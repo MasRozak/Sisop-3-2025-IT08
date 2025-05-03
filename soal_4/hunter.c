@@ -269,9 +269,15 @@ void battle(struct Hunter *self, struct SystemData *data) {
         int old_hp = self->hp;
         int old_def = self->def;
         
-        self->atk += data->hunters[target].atk / 2;  
-        self->hp += data->hunters[target].hp / 2;
-        self->def += data->hunters[target].def / 2;
+        char target_name[50];
+        strcpy(target_name, data->hunters[target].username);
+        int target_atk = data->hunters[target].atk;
+        int target_hp = data->hunters[target].hp;
+        int target_def = data->hunters[target].def;
+        
+        self->atk += target_atk;  
+        self->hp += target_hp;
+        self->def += target_def;
         
         for (int i = target; i < data->num_hunters - 1; i++) {
             data->hunters[i] = data->hunters[i + 1];
@@ -279,16 +285,32 @@ void battle(struct Hunter *self, struct SystemData *data) {
         data->num_hunters--;
         
         printf(" " GREEN "🏆 VICTORY! " RESET "You defeated %s and gained their powers!      \n", 
-               data->hunters[target].username);
+               target_name);
         printf("                                                                \n");
         printf(" " YELLOW "BATTLE REWARDS:" RESET "                                            \n");
         printf("   ⚔️  ATK: " RED "+%d" RESET " (%d → %d)                                    \n", 
-               self->atk - old_atk, old_atk, self->atk);
+               target_atk, old_atk, self->atk);
         printf("   ❤️  HP:  " GREEN "+%d" RESET " (%d → %d)                                  \n", 
-               self->hp - old_hp, old_hp, self->hp);
+               target_hp, old_hp, self->hp);
         printf("   🛡️  DEF: " BLUE "+%d" RESET " (%d → %d)                                   \n", 
-               self->def - old_def, old_def, self->def);
+               target_def, old_def, self->def);
     } else if (self_power < target_power) {
+        int self_atk = self->atk;
+        int self_hp = self->hp;
+        int self_def = self->def;
+        
+        for (int i = 0; i < data->num_hunters; i++) {
+            if (strcmp(data->hunters[i].username, data->hunters[target].username) == 0) {
+                data->hunters[i].atk += self_atk;
+                data->hunters[i].hp += self_hp;
+                data->hunters[i].def += self_def;
+                break;
+            }
+        }
+
+        char target_name[50];
+        strcpy(target_name, data->hunters[target].username);
+
         for (int i = 0; i < data->num_hunters; i++) {
             if (strcmp(data->hunters[i].username, self->username) == 0) {
                 for (int j = i; j < data->num_hunters - 1; j++) {
@@ -298,25 +320,25 @@ void battle(struct Hunter *self, struct SystemData *data) {
                 break;
             }
         }
-        
-        printf(" " RED "❌ DEFEAT! " RESET "You lost to %s and your account is deleted!    \n", 
-               data->hunters[target].username);
+
+        printf(" " RED "❌ DEFEAT! " RESET "You lost to %s and your account is deleted!    \n", target_name);
         printf("                                                                \n");
+        printf(" " YELLOW "BATTLE REWARDS FOR %s:" RESET "                                    \n", target_name);
+        printf("   ⚔️  ATK: " RED "+%d" RESET " (%d → %d)                                    \n", 
+               self_atk, data->hunters[target].atk - self_atk, data->hunters[target].atk);
+        printf("   ❤️  HP:  " GREEN "+%d" RESET " (%d → %d)                                  \n", 
+               self_hp, data->hunters[target].hp - self_hp, data->hunters[target].hp);
+        printf("   🛡️  DEF: " BLUE "+%d" RESET " (%d → %d)                                   \n", 
+               self_def, data->hunters[target].def - self_def, data->hunters[target].def);
         printf(" " YELLOW "You will need to create a new hunter account." RESET "              \n");
+        
+        print_footer();
+        exit(0); 
     } else {
         printf(" " YELLOW "DRAW! No winner, battle ends in a tie.\n" RESET);
     }
     
-    print_footer();
-    
-    if (self_power < target_power) {
-        printf(CLEAR_SCREEN);
-        print_header(RED "HUNTER DEFEATED" YELLOW);
-        printf(" Your hunter has been eliminated from the game.              \n");
-        printf(" Please restart the application to create a new hunter.      \n");
-        print_footer();
-        exit(0);
-    }
+    print_footer(); 
 }
 
 void show_hunter_stats(struct Hunter *hunter) {
