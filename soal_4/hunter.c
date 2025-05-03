@@ -176,6 +176,8 @@ void dungeon_notification(struct Hunter *hunter, struct SystemData *data) {
     int toggle = 0;
     
     while (running) {
+        check_banned_status(hunter, data);
+
         printf(CLEAR_SCREEN); 
         printf(BLUE);
         printf("╔══════════════════════════════════════════════════════════════════════════════╗\n");
@@ -186,7 +188,7 @@ void dungeon_notification(struct Hunter *hunter, struct SystemData *data) {
             if (toggle % 2 == 0) {
                 printf(MAGENTA "  🌟 Dungeon Alert!🌟 " RESET);
             } else {
-                printf(YELLOW "  ⚡ Dungeon Allert!⚡ " RESET);
+                printf(YELLOW "  ⚡ Dungeon Alert!⚡ " RESET);
             }
             
             printf(GREEN "An " CYAN "%s" GREEN " for minimum level " YELLOW "%d" GREEN " open\n" RESET,
@@ -369,6 +371,18 @@ void show_hunter_stats(struct Hunter *hunter) {
     print_footer();
 }
 
+void check_banned_status(struct Hunter *hunter, struct SystemData *data) {
+    if (hunter->banned) {
+        printf(CLEAR-screen);
+        print_header(RED "ACCOUNT BANNED" YELLOW);
+        printf(" Your account has been banned by the system. Contact support.\n");
+        print_footer();
+        shmdt(data); 
+        printf(YELLOW "Connection terminated.\n" RESET);
+        exit(0); 
+    }
+}
+
 struct Hunter* login(struct SystemData *data) {
     char uname[50];
     printf(" Masukkan username: ");
@@ -490,12 +504,15 @@ int main() {
     }
 
     while (1) {
+        // Periksa status banned sebelum menampilkan menu
+        check_banned_status(me, data);
+    
         printf(CLEAR_SCREEN);
         printf(BLUE);
         printf("╔══════════════════════════════════════════════════════════════════════════════╗\n");
         printf("                " WHITE "                HUNTER TERMINAL" BLUE "                         \n");
         printf("╠══════════════════════════════════════════════════════════════════════════════╣\n");
-
+    
         if (data->num_dungeons > 0) {
             int display_index = data->current_notification_index % data->num_dungeons;
             printf(GREEN "    🌟 Dungeon Alert!🌟 An " CYAN "%s" GREEN " for minimum level " YELLOW "%d" GREEN " open\n" RESET,
@@ -506,7 +523,7 @@ int main() {
         } else {
             printf(RED "No dungeons available\n" RESET);
         }
-
+    
         printf("╠══════════════════════════════════════════════════════════════════════════════╣\n");
         printf("  " WHITE "1" BLUE " 📊  " WHITE "Show My Stats\n");
         printf("  " WHITE "2" BLUE " 🔍  " WHITE "Show Available Dungeons\n");
@@ -517,27 +534,34 @@ int main() {
         printf("╚══════════════════════════════════════════════════════════════════════════════╝\n");
         printf(WHITE "Logged in as: " CYAN "%s" WHITE " (Level %d)\n" RESET, me->username, me->level);
         printf("Enter your choice: ");
-
+    
         int choice;
         scanf("%d", &choice);
         getchar();
-
-        if (me->banned) {
-            printf(CLEAR_SCREEN);
-            print_header(RED "ACCOUNT BANNED" YELLOW);
-            printf(" Your account has been banned. Contact support.           \n");
-            print_footer();
-            continue;
-        }
-
+    
+        check_banned_status(me, data);
+    
         switch (choice) {
-            case 1: show_hunter_stats(me); break;
-            case 2: show_dungeons(me, data); break;
-            case 3: raid_dungeon(me, data); break;
-            case 4: battle(me, data); break;
+            case 1: 
+                show_hunter_stats(me); 
+                check_banned_status(me, data); 
+                break;
+            case 2: 
+                show_dungeons(me, data); 
+                check_banned_status(me, data); 
+                break;
+            case 3: 
+                raid_dungeon(me, data); 
+                check_banned_status(me, data); 
+                break;
+            case 4: 
+                battle(me, data); 
+                check_banned_status(me, data); 
+                break;
             case 5: 
                 printf("\n" GREEN "✓ Notification started. Press Ctrl+C to stop.\n" RESET);
                 dungeon_notification(me, data);
+                check_banned_status(me, data); 
                 break;
             case 6:
                 printf(CLEAR_SCREEN);
