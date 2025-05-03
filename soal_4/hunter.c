@@ -1,17 +1,7 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/shm.h>
-#include <sys/ipc.h>
-#include <unistd.h>
-#include <signal.h>
-#include <time.h>
+#include "shm_common.h"
 #include <stdbool.h>
-
-#define SHM_KEY 0x1234
-#define MAX_HUNTER 10
-#define DUNGEON_KEY 0x4321
-#define MAX_DUNGEON 10
+#include <signal.h>
+#include <unistd.h>
 
 #define RESET   "\033[0m"
 #define RED     "\033[1;31m"
@@ -24,54 +14,32 @@
 
 #define CLEAR_SCREEN "\033[2J\033[H"
 
-typedef struct {
-    int used;
-    char username[32];
-    int level;
-    int exp;
-    int atk;
-    int hp;
-    int def;
-    int online;
-    int banned;
-} HunterData;
-
-typedef struct {
-    int used;
-    char name[64];
-    int min_level;
-    int reward_exp;
-    int reward_atk;
-    int reward_hp;
-    int reward_def;
-} Dungeon;
-
 int running = 1;
 
 void print_header(const char *title);
 void print_footer();
 void stop_notification(int sig);
-void show_dungeons(HunterData *hunter, Dungeon *dungeons);
-void raid_dungeon(HunterData *hunter, Dungeon *dungeons);
-void dungeon_notification(HunterData *hunter, Dungeon *dungeons);
-void battle(HunterData *self, HunterData *hunters);
-HunterData* login(HunterData *hunters);
-HunterData* register_hunter(HunterData *hunters);
-void show_hunter_stats(HunterData *hunter);
+void show_dungeons(struct Hunter *hunter, struct SystemData *data);
+void raid_dungeon(struct Hunter *hunter, struct SystemData *data);
+void dungeon_notification(struct Hunter *hunter, struct SystemData *data);
+void battle(struct Hunter *self, struct SystemData *data);
+struct Hunter* login(struct SystemData *data);
+struct Hunter* register_hunter(struct SystemData *data);
+void show_hunter_stats(struct Hunter *hunter);
 
 void print_header(const char *title) {
     printf(YELLOW);
-    printf("╔════════════════════════════════════════════════════════════════╗\n");
+    printf("╔═════════════════════════════════════════════════════════════════════════════════════════════╗\n");
     printf(" %s", title);
     for(int i = strlen(title); i < 60; i++) printf(" ");
     printf("\n");
-    printf("╠════════════════════════════════════════════════════════════════╣\n");
+    printf("╠═════════════════════════════════════════════════════════════════════════════════════════════╣\n");
     printf(RESET);
 }
 
 void print_footer() {
     printf(YELLOW);
-    printf("╚════════════════════════════════════════════════════════════════╝\n");
+    printf("╚════════════════════════════════════════════════════════════════════════════════════════════╝\n");
     printf(RESET);
     printf("\nPress Enter to continue...");
     getchar();
@@ -81,23 +49,23 @@ void stop_notification(int sig) {
     running = 0;
 }
 
-void show_dungeons(HunterData *hunter, Dungeon *dungeons) {
+void show_dungeons(struct Hunter *hunter, struct SystemData *data) {
     printf(CLEAR_SCREEN);
     print_header(MAGENTA "AVAILABLE DUNGEONS" YELLOW);
     
     int found = 0;
-    for (int i = 0; i < MAX_DUNGEON; i++) {
-        if (dungeons[i].used && hunter->level >= dungeons[i].min_level) {
+    for (int i = 0; i < data->num_dungeons; i++) {
+        if (hunter->level >= data->dungeons[i].min_level) {
             found++;
             printf(" " CYAN "[%d]" RESET " %-20s | " YELLOW "Min Lv:" RESET "%d | " MAGENTA "EXP:" RESET "%3d | " 
                    RED "ATK:" RESET "%3d | " GREEN "HP:" RESET "%3d | " BLUE "DEF:" RESET "%2d \n",
                 i + 1,
-                dungeons[i].name,
-                dungeons[i].min_level,
-                dungeons[i].reward_exp,
-                dungeons[i].reward_atk,
-                dungeons[i].reward_hp,
-                dungeons[i].reward_def
+                data->dungeons[i].name,
+                data->dungeons[i].min_level,
+                data->dungeons[i].exp,
+                data->dungeons[i].atk,
+                data->dungeons[i].hp,
+                data->dungeons[i].def
             );
         }
     }
@@ -110,23 +78,23 @@ void show_dungeons(HunterData *hunter, Dungeon *dungeons) {
     print_footer();
 }
 
-void raid_dungeon(HunterData *hunter, Dungeon *dungeons) {
+void raid_dungeon(struct Hunter *hunter, struct SystemData *data) {
     printf(CLEAR_SCREEN);
     print_header(GREEN "RAID DUNGEON" YELLOW);
     
     int found = 0;
-    for (int i = 0; i < MAX_DUNGEON; i++) {
-        if (dungeons[i].used && hunter->level >= dungeons[i].min_level) {
+    for (int i = 0; i < data->num_dungeons; i++) {
+        if (hunter->level >= data->dungeons[i].min_level) {
             found++;
             printf(" " CYAN "[%d]" RESET " %-20s | " YELLOW "Min Lv:" RESET "%d | " MAGENTA "EXP:" RESET "%3d | " 
                    RED "ATK:" RESET "%3d | " GREEN "HP:" RESET "%3d | " BLUE "DEF:" RESET "%2d \n",
                 i + 1,
-                dungeons[i].name,
-                dungeons[i].min_level,
-                dungeons[i].reward_exp,
-                dungeons[i].reward_atk,
-                dungeons[i].reward_hp,
-                dungeons[i].reward_def
+                data->dungeons[i].name,
+                data->dungeons[i].min_level,
+                data->dungeons[i].exp,
+                data->dungeons[i].atk,
+                data->dungeons[i].hp,
+                data->dungeons[i].def
             );
         }
     }
@@ -145,7 +113,7 @@ void raid_dungeon(HunterData *hunter, Dungeon *dungeons) {
     getchar();
     id--;
     
-    if (id < 0 || id >= MAX_DUNGEON || !dungeons[id].used || hunter->level < dungeons[id].min_level) {
+    if (id < 0 || id >= data->num_dungeons || hunter->level < data->dungeons[id].min_level) {
         printf("                                                                \n");
         printf(" " RED "Invalid dungeon selected. Please try again." RESET "               \n");
         print_footer();
@@ -153,7 +121,7 @@ void raid_dungeon(HunterData *hunter, Dungeon *dungeons) {
     }
     
     printf("                                                                \n");
-    printf(" " CYAN "Raiding dungeon: %s" RESET "                              \n", dungeons[id].name);
+    printf(" " CYAN "Raiding dungeon: %s" RESET "                              \n", data->dungeons[id].name);
     printf("                                                                \n");
     
     int old_level = hunter->level;
@@ -162,10 +130,10 @@ void raid_dungeon(HunterData *hunter, Dungeon *dungeons) {
     int old_hp = hunter->hp;
     int old_def = hunter->def;
     
-    hunter->exp += dungeons[id].reward_exp;
-    hunter->atk += dungeons[id].reward_atk;
-    hunter->hp += dungeons[id].reward_hp;
-    hunter->def += dungeons[id].reward_def;
+    hunter->exp += data->dungeons[id].exp;
+    hunter->atk += data->dungeons[id].atk;
+    hunter->hp += data->dungeons[id].hp;
+    hunter->def += data->dungeons[id].def;
     
     bool level_up = false;
     if (hunter->exp >= 500) {
@@ -174,19 +142,22 @@ void raid_dungeon(HunterData *hunter, Dungeon *dungeons) {
         level_up = true;
     }
     
-    dungeons[id].used = 0;
+    for (int i = id; i < data->num_dungeons - 1; i++) {
+        data->dungeons[i] = data->dungeons[i + 1];
+    }
+    data->num_dungeons--;
     
     printf(" " GREEN "⚔️  DUNGEON CLEARED SUCCESSFULLY! ⚔️" RESET "                       \n");
     printf("                                                                \n");
     printf(" " YELLOW "REWARDS:" RESET "                                                    \n");
     printf("   🌟 EXP: " CYAN "+%d" RESET " (%d → %d)                                    \n", 
-           dungeons[id].reward_exp, old_exp, hunter->exp);
+           data->dungeons[id].exp, old_exp, hunter->exp);
     printf("   ⚔️  ATK: " RED "+%d" RESET " (%d → %d)                                    \n", 
-           dungeons[id].reward_atk, old_atk, hunter->atk);
+           data->dungeons[id].atk, old_atk, hunter->atk);
     printf("   ❤️  HP:  " GREEN "+%d" RESET " (%d → %d)                                  \n", 
-           dungeons[id].reward_hp, old_hp, hunter->hp);
+           data->dungeons[id].hp, old_hp, hunter->hp);
     printf("   🛡️  DEF: " BLUE "+%d" RESET " (%d → %d)                                   \n", 
-           dungeons[id].reward_def, old_def, hunter->def);
+           data->dungeons[id].def, old_def, hunter->def);
     
     if (level_up) {
         printf("                                                                \n");
@@ -197,69 +168,73 @@ void raid_dungeon(HunterData *hunter, Dungeon *dungeons) {
     print_footer();
 }
 
-void dungeon_notification(HunterData *hunter, Dungeon *dungeons) {
+void dungeon_notification(struct Hunter *hunter, struct SystemData *data) {
     signal(SIGINT, stop_notification);
     
-    printf(CLEAR_SCREEN);
-    print_header(CYAN "DUNGEON NOTIFICATION SYSTEM" YELLOW);
-    printf(" " GREEN "✓ " RESET "Notification started. Press Ctrl+C to stop.               \n");
-    print_footer();
+    running = 1;
+    int current_index = 0;
+    int toggle = 0;
     
     while (running) {
-        printf(CLEAR_SCREEN);
-        print_header(MAGENTA "LIVE DUNGEON UPDATES" YELLOW);
+        printf(CLEAR_SCREEN); 
+        printf(BLUE);
+        printf("╔══════════════════════════════════════════════════════════════════════════════╗\n");
+        printf("                " WHITE "                HUNTER TERMINAL" BLUE "                         \n");
+        printf("╠══════════════════════════════════════════════════════════════════════════════╣\n");
         
-        int found = 0;
-        for (int i = 0; i < MAX_DUNGEON; i++) {
-            if (dungeons[i].used && hunter->level >= dungeons[i].min_level) {
-                found++;
-                printf(" " CYAN "[%d]" RESET " %-20s | " YELLOW "Min Lv:" RESET "%d | " MAGENTA "EXP:" RESET "%3d | " 
-                       RED "ATK:" RESET "%3d | " GREEN "HP:" RESET "%3d | " BLUE "DEF:" RESET "%2d \n",
-                    i + 1,
-                    dungeons[i].name,
-                    dungeons[i].min_level,
-                    dungeons[i].reward_exp,
-                    dungeons[i].reward_atk,
-                    dungeons[i].reward_hp,
-                    dungeons[i].reward_def
-                );
+        if (data->num_dungeons > 0) {
+            if (toggle % 2 == 0) {
+                printf(MAGENTA "  🌟 Dungeon Alert!🌟 " RESET);
+            } else {
+                printf(YELLOW "  ⚡ Dungeon Allert!⚡ " RESET);
             }
+            
+            printf(GREEN "An " CYAN "%s" GREEN " for minimum level " YELLOW "%d" GREEN " open\n" RESET,
+                   data->dungeons[current_index].name,
+                   data->dungeons[current_index].min_level);
+                   
+            data->current_notification_index = current_index;
+        } else {
+            printf(RED "No dungeons available\n" RESET);
         }
         
-        if (!found) {
-            printf(" " RED "No available dungeon for your level." RESET "                     \n");
-            printf(" " YELLOW "Try to level up to access more dungeons!" RESET "                  \n");
+        printf("╠══════════════════════════════════════════════════════════════════════════════╣\n");
+        printf("  " WHITE "1" BLUE " 📊  " WHITE "Show My Stats\n");
+        printf("  " WHITE "2" BLUE " 🔍  " WHITE "Show Available Dungeons\n");
+        printf("  " WHITE "3" BLUE " ⚔️  " WHITE "Raid Dungeon\n");
+        printf("  " WHITE "4" BLUE " 🏆  " WHITE "Battle Another Hunter\n");
+        printf("  " WHITE "5" BLUE " 🔔  " WHITE "Start Dungeon Notification\n");
+        printf("  " WHITE "6" BLUE " 🚪  " WHITE "Exit\n");
+        printf("╚══════════════════════════════════════════════════════════════════════════════╝\n");
+        printf(WHITE "Logged in as: " CYAN "%s" WHITE " (Level %d)\n" RESET, hunter->username, hunter->level);
+        printf("\nPress Ctrl+C to stop notifications\n");
+
+        if (data->num_dungeons > 0) {
+            current_index = (current_index + 1) % data->num_dungeons;
         }
         
-        printf("                                                                \n");
-        printf(" " BLUE "Refreshing in 3 seconds..." RESET " (Press Ctrl+C to stop)          \n");
-        printf(YELLOW "╚════════════════════════════════════════════════════════════════╝\n" RESET);
-        
-        sleep(3);
+        toggle++; 
+        fflush(stdout); 
+        sleep(3); 
     }
-    
-    printf(CLEAR_SCREEN);
-    print_header(RED "NOTIFICATION STOPPED" YELLOW);
-    printf(" Dungeon notification service has been stopped.                \n");
-    print_footer();
 }
 
-void battle(HunterData *self, HunterData *hunters) {
+void battle(struct Hunter *self, struct SystemData *data) {
     printf(CLEAR_SCREEN);
     print_header(RED "HUNTER BATTLE ARENA" YELLOW);
     
     int available = 0;
-    for (int i = 0; i < MAX_HUNTER; i++) {
-        if (hunters[i].used && hunters[i].online && strcmp(hunters[i].username, self->username) != 0) {
+    for (int i = 0; i < data->num_hunters; i++) {
+        if (strcmp(data->hunters[i].username, self->username) != 0) {
             available++;
             printf(" " CYAN "[%d]" RESET " %-20s | " YELLOW "Lv:" RESET "%2d | " 
                    RED "ATK:" RESET "%3d | " GREEN "HP:" RESET "%3d | " BLUE "DEF:" RESET "%2d        \n",
                 i,
-                hunters[i].username,
-                hunters[i].level,
-                hunters[i].atk,
-                hunters[i].hp,
-                hunters[i].def
+                data->hunters[i].username,
+                data->hunters[i].level,
+                data->hunters[i].atk,
+                data->hunters[i].hp,
+                data->hunters[i].def
             );
         }
     }
@@ -276,8 +251,7 @@ void battle(HunterData *self, HunterData *hunters) {
     scanf("%d", &target);
     getchar();
     
-    if (target < 0 || target >= MAX_HUNTER || !hunters[target].used || !hunters[target].online || 
-        strcmp(hunters[target].username, self->username) == 0) {
+    if (target < 0 || target >= data->num_hunters || strcmp(data->hunters[target].username, self->username) == 0) {
         printf("                                                                \n");
         printf(" " RED "Invalid target selection. Please try again." RESET "               \n");
         print_footer();
@@ -288,61 +262,94 @@ void battle(HunterData *self, HunterData *hunters) {
     printf(" " CYAN "⚔️  BATTLE INITIATION ⚔️" RESET "                                    \n");
     printf("                                                                \n");
     printf(" " GREEN "%s" RESET " vs " RED "%s" RESET "                                    \n", 
-           self->username, hunters[target].username);
+           self->username, data->hunters[target].username);
     printf("                                                                \n");
     
     int self_power = self->atk + self->hp + self->def;
-    int target_power = hunters[target].atk + hunters[target].hp + hunters[target].def;
+    int target_power = data->hunters[target].atk + data->hunters[target].hp + data->hunters[target].def;
     
     printf(" " GREEN "Your Power:" RESET " %d                                             \n", self_power);
     printf(" " RED "Enemy Power:" RESET " %d                                            \n", target_power);
     printf("                                                                \n");
     
-    if (self_power >= target_power) {
+    if (self_power > target_power) {
         int old_atk = self->atk;
         int old_hp = self->hp;
         int old_def = self->def;
         
-        self->atk += hunters[target].atk / 2;  
-        self->hp += hunters[target].hp / 2;
-        self->def += hunters[target].def / 2;
-        hunters[target].used = 0;  
+        char target_name[50];
+        strcpy(target_name, data->hunters[target].username);
+        int target_atk = data->hunters[target].atk;
+        int target_hp = data->hunters[target].hp;
+        int target_def = data->hunters[target].def;
+        
+        self->atk += target_atk;  
+        self->hp += target_hp;
+        self->def += target_def;
+        
+        for (int i = target; i < data->num_hunters - 1; i++) {
+            data->hunters[i] = data->hunters[i + 1];
+        }
+        data->num_hunters--;
         
         printf(" " GREEN "🏆 VICTORY! " RESET "You defeated %s and gained their powers!      \n", 
-               hunters[target].username);
+               target_name);
         printf("                                                                \n");
         printf(" " YELLOW "BATTLE REWARDS:" RESET "                                            \n");
         printf("   ⚔️  ATK: " RED "+%d" RESET " (%d → %d)                                    \n", 
-               self->atk - old_atk, old_atk, self->atk);
+               target_atk, old_atk, self->atk);
         printf("   ❤️  HP:  " GREEN "+%d" RESET " (%d → %d)                                  \n", 
-               self->hp - old_hp, old_hp, self->hp);
+               target_hp, old_hp, self->hp);
         printf("   🛡️  DEF: " BLUE "+%d" RESET " (%d → %d)                                   \n", 
-               self->def - old_def, old_def, self->def);
-    } else {
-        hunters[target].atk += self->atk / 2; 
-        hunters[target].hp += self->hp / 2;
-        hunters[target].def += self->def / 2;
-        self->used = 0;
+               target_def, old_def, self->def);
+    } else if (self_power < target_power) {
+        int self_atk = self->atk;
+        int self_hp = self->hp;
+        int self_def = self->def;
         
-        printf(" " RED "❌ DEFEAT! " RESET "You lost to %s and your account is deleted!    \n", 
-               hunters[target].username);
+        for (int i = 0; i < data->num_hunters; i++) {
+            if (strcmp(data->hunters[i].username, data->hunters[target].username) == 0) {
+                data->hunters[i].atk += self_atk;
+                data->hunters[i].hp += self_hp;
+                data->hunters[i].def += self_def;
+                break;
+            }
+        }
+
+        char target_name[50];
+        strcpy(target_name, data->hunters[target].username);
+
+        for (int i = 0; i < data->num_hunters; i++) {
+            if (strcmp(data->hunters[i].username, self->username) == 0) {
+                for (int j = i; j < data->num_hunters - 1; j++) {
+                    data->hunters[j] = data->hunters[j + 1];
+                }
+                data->num_hunters--;
+                break;
+            }
+        }
+
+        printf(" " RED "❌ DEFEAT! " RESET "You lost to %s and your account is deleted!    \n", target_name);
         printf("                                                                \n");
+        printf(" " YELLOW "BATTLE REWARDS FOR %s:" RESET "                                    \n", target_name);
+        printf("   ⚔️  ATK: " RED "+%d" RESET " (%d → %d)                                    \n", 
+               self_atk, data->hunters[target].atk - self_atk, data->hunters[target].atk);
+        printf("   ❤️  HP:  " GREEN "+%d" RESET " (%d → %d)                                  \n", 
+               self_hp, data->hunters[target].hp - self_hp, data->hunters[target].hp);
+        printf("   🛡️  DEF: " BLUE "+%d" RESET " (%d → %d)                                   \n", 
+               self_def, data->hunters[target].def - self_def, data->hunters[target].def);
         printf(" " YELLOW "You will need to create a new hunter account." RESET "              \n");
-    }
-    
-    print_footer();
-    
-    if (self_power < target_power) {
-        printf(CLEAR_SCREEN);
-        print_header(RED "HUNTER DEFEATED" YELLOW);
-        printf(" Your hunter has been eliminated from the game.              \n");
-        printf(" Please restart the application to create a new hunter.      \n");
+        
         print_footer();
-        exit(0);
+        exit(0); 
+    } else {
+        printf(" " YELLOW "DRAW! No winner, battle ends in a tie.\n" RESET);
     }
+    
+    print_footer(); 
 }
 
-void show_hunter_stats(HunterData *hunter) {
+void show_hunter_stats(struct Hunter *hunter) {
     printf(CLEAR_SCREEN);
     print_header(CYAN "HUNTER PROFILE" YELLOW);
     
@@ -362,23 +369,22 @@ void show_hunter_stats(HunterData *hunter) {
     print_footer();
 }
 
-HunterData* login(HunterData *hunters) {
-    char uname[32];
+struct Hunter* login(struct SystemData *data) {
+    char uname[50];
     printf(" Masukkan username: ");
     scanf("%s", uname);
     getchar();
 
-    for (int i = 0; i < MAX_HUNTER; i++) {
-        if (hunters[i].used && strcmp(hunters[i].username, uname) == 0) {
-            if (hunters[i].banned) {
+    for (int i = 0; i < data->num_hunters; i++) {
+        if (strcmp(data->hunters[i].username, uname) == 0) {
+            if (data->hunters[i].banned) {
                 printf(RED "⛔ Akun diblokir. Hubungi admin.\n" RESET);
                 sleep(2);
                 return NULL;
             }
-            hunters[i].online = 1;
             printf(GREEN "✓ Selamat datang kembali, %s!\n" RESET, uname);
             sleep(2);
-            return &hunters[i];
+            return &data->hunters[i];
         }
     }
 
@@ -387,58 +393,40 @@ HunterData* login(HunterData *hunters) {
     return NULL;
 }
 
-HunterData* register_hunter(HunterData *hunters) {
-    char uname[32];
+struct Hunter* register_hunter(struct SystemData *data) {
+    char uname[50];
     printf(" Buat username baru: ");
     scanf("%s", uname);
     getchar();
 
-    for (int i = 0; i < MAX_HUNTER; i++) {
-        if (hunters[i].used && strcmp(hunters[i].username, uname) == 0) {
+    for (int i = 0; i < data->num_hunters; i++) {
+        if (strcmp(data->hunters[i].username, uname) == 0) {
             printf(RED "❌ Username sudah digunakan.\n" RESET);
             sleep(2);
             return NULL;
         }
     }
 
-    for (int i = 0; i < MAX_HUNTER; i++) {
-        if (!hunters[i].used) {
-            hunters[i].used = 1;
-            strcpy(hunters[i].username, uname);
-            hunters[i].level = 1;
-            hunters[i].exp = 0;
-            hunters[i].atk = 10;
-            hunters[i].hp = 100;
-            hunters[i].def = 5;
-            hunters[i].online = 1;
-            hunters[i].banned = 0;
-
-            printf(GREEN "✓ Akun berhasil dibuat! Selamat datang, %s!\n" RESET, uname);
-            sleep(2);
-            return &hunters[i];
-        }
+    if (data->num_hunters >= MAX_HUNTERS) {
+        printf(RED "❌ Server penuh. Tidak bisa mendaftar lagi.\n" RESET);
+        sleep(2);
+        return NULL;
     }
 
-    printf(RED "❌ Server penuh. Tidak bisa mendaftar lagi.\n" RESET);
-    sleep(2);
-    return NULL;
-}
+    struct Hunter *new_hunter = &data->hunters[data->num_hunters];
+    strcpy(new_hunter->username, uname);
+    new_hunter->level = 1;
+    new_hunter->exp = 0;
+    new_hunter->atk = 10;
+    new_hunter->hp = 100;
+    new_hunter->def = 5;
+    new_hunter->banned = 0;
+    new_hunter->shm_key = get_system_key();
+    data->num_hunters++;
 
-int menu_awal() {
-    int pilihan;
-    printf(CLEAR_SCREEN);
-    printf(YELLOW);
-    printf("╔════════════════════════════════════════════════════════════════╗\n");
-    printf("                   " CYAN "HUNTER ASSOCIATION" YELLOW " MENU                    \n");
-    printf("╠════════════════════════════════════════════════════════════════╣\n");
-    printf(" " CYAN "[1]" RESET " Register                                             \n");
-    printf(" " CYAN "[2]" RESET " Login                                                \n");
-    printf(" " CYAN "[3]" RESET " Exit                                                 \n");
-    printf("╚════════════════════════════════════════════════════════════════╝\n");
-    printf(" Pilih opsi (1-3): ");
-    scanf("%d", &pilihan);
-    getchar(); 
-    return pilihan;
+    printf(GREEN "✓ Akun berhasil dibuat! Selamat datang, %s!\n" RESET, uname);
+    sleep(2);
+    return new_hunter;
 }
 
 int main() {
@@ -450,46 +438,29 @@ int main() {
     printf("╚════════════════════════════════════════════════════════════════╝\n");
     printf(RESET);
 
-    int shmid = shmget(SHM_KEY, sizeof(HunterData) * MAX_HUNTER, 0666);
+    key_t key = get_system_key();
+    int shmid = shmget(key, sizeof(struct SystemData), 0666);
     if (shmid < 0) {
-        shmid = shmget(SHM_KEY, sizeof(HunterData) * MAX_HUNTER, IPC_CREAT | 0666);
+        shmid = shmget(key, sizeof(struct SystemData), IPC_CREAT | 0666);
         if (shmid < 0) {
-            perror(RED "ERROR: Cannot create shared memory for hunters\n" RESET);
+            perror(RED "ERROR: Cannot create shared memory\n" RESET);
             exit(1);
         }
-        printf(GREEN "✓ " RESET "Created new shared memory for hunters\n");
+        printf(GREEN "✓ " RESET "Created new shared memory\n");
     } else {
-        printf(GREEN "✓ " RESET "Connected to existing hunter shared memory\n");
+        printf(GREEN "✓ " RESET "Connected to existing shared memory\n");
     }
 
-    HunterData *hunters = shmat(shmid, NULL, 0);
-    if (hunters == (void *) -1) {
-        perror(RED "ERROR: Cannot attach hunter memory\n" RESET);
-        exit(1);
-    }
-
-    int dshmid = shmget(DUNGEON_KEY, sizeof(Dungeon) * MAX_DUNGEON, 0666);
-    if (dshmid < 0) {
-        dshmid = shmget(DUNGEON_KEY, sizeof(Dungeon) * MAX_DUNGEON, IPC_CREAT | 0666);
-        if (dshmid < 0) {
-            perror(RED "ERROR: Cannot create shared memory for dungeons\n" RESET);
-            exit(1);
-        }
-        printf(GREEN "✓ " RESET "Created new shared memory for dungeons\n");
-    } else {
-        printf(GREEN "✓ " RESET "Connected to existing dungeon shared memory\n");
-    }
-
-    Dungeon *dungeons = shmat(dshmid, NULL, 0);
-    if (dungeons == (void *) -1) {
-        perror(RED "ERROR: Cannot attach dungeon memory\n" RESET);
+    struct SystemData *data = shmat(shmid, NULL, 0);
+    if (data == (void *) -1) {
+        perror(RED "ERROR: Cannot attach memory\n" RESET);
         exit(1);
     }
 
     printf(GREEN "\n⚔️  System is ready! Connecting to server..." RESET);
     sleep(2);
 
-    HunterData *me = NULL;
+    struct Hunter *me = NULL;
     while (!me) {
         printf(CLEAR_SCREEN);
         printf(BLUE);
@@ -505,13 +476,12 @@ int main() {
         scanf("%d", &opt);
         getchar(); 
         if (opt == 1) {
-            me = register_hunter(hunters);
+            me = register_hunter(data);
         } else if (opt == 2) {
-            me = login(hunters);
+            me = login(data);
         } else if (opt == 3) {
             printf(YELLOW "Goodbye, Hunter!\n" RESET);
-            shmdt(hunters);
-            shmdt(dungeons);
+            shmdt(data);
             exit(0);
         } else {
             printf(RED "Invalid choice. Try again.\n" RESET);
@@ -522,16 +492,29 @@ int main() {
     while (1) {
         printf(CLEAR_SCREEN);
         printf(BLUE);
-        printf("╔════════════════════════════════════════════════════════════════╗\n");
-        printf("                    " WHITE "HUNTER TERMINAL" BLUE "                         \n");
-        printf("╠════════════════════════════════════════════════════════════════╣\n");
+        printf("╔══════════════════════════════════════════════════════════════════════════════╗\n");
+        printf("                " WHITE "                HUNTER TERMINAL" BLUE "                         \n");
+        printf("╠══════════════════════════════════════════════════════════════════════════════╣\n");
+
+        if (data->num_dungeons > 0) {
+            int display_index = data->current_notification_index % data->num_dungeons;
+            printf(GREEN "    🌟 Dungeon Alert!🌟 An " CYAN "%s" GREEN " for minimum level " YELLOW "%d" GREEN " open\n" RESET,
+                   data->dungeons[display_index].name,
+                   data->dungeons[display_index].min_level);
+            
+            data->current_notification_index = (data->current_notification_index + 1) % data->num_dungeons;
+        } else {
+            printf(RED "No dungeons available\n" RESET);
+        }
+
+        printf("╠══════════════════════════════════════════════════════════════════════════════╣\n");
         printf("  " WHITE "1" BLUE " 📊  " WHITE "Show My Stats\n");
         printf("  " WHITE "2" BLUE " 🔍  " WHITE "Show Available Dungeons\n");
         printf("  " WHITE "3" BLUE " ⚔️  " WHITE "Raid Dungeon\n");
         printf("  " WHITE "4" BLUE " 🏆  " WHITE "Battle Another Hunter\n");
         printf("  " WHITE "5" BLUE " 🔔  " WHITE "Start Dungeon Notification\n");
         printf("  " WHITE "6" BLUE " 🚪  " WHITE "Exit\n");
-        printf("╚════════════════════════════════════════════════════════════════╝\n");
+        printf("╚══════════════════════════════════════════════════════════════════════════════╝\n");
         printf(WHITE "Logged in as: " CYAN "%s" WHITE " (Level %d)\n" RESET, me->username, me->level);
         printf("Enter your choice: ");
 
@@ -549,18 +532,19 @@ int main() {
 
         switch (choice) {
             case 1: show_hunter_stats(me); break;
-            case 2: show_dungeons(me, dungeons); break;
-            case 3: raid_dungeon(me, dungeons); break;
-            case 4: battle(me, hunters); break;
-            case 5: dungeon_notification(me, dungeons); break;
+            case 2: show_dungeons(me, data); break;
+            case 3: raid_dungeon(me, data); break;
+            case 4: battle(me, data); break;
+            case 5: 
+                printf("\n" GREEN "✓ Notification started. Press Ctrl+C to stop.\n" RESET);
+                dungeon_notification(me, data);
+                break;
             case 6:
                 printf(CLEAR_SCREEN);
                 print_header(YELLOW "LOGGING OUT");
-                me->online = 0;
                 printf(" Goodbye, hunter! Your progress has been saved.\n");
                 print_footer();
-                shmdt(hunters);
-                shmdt(dungeons);
+                shmdt(data);
                 printf(CLEAR_SCREEN);
                 printf(YELLOW);
                 printf("╔════════════════════════════════════════════════════════════════╗\n");
