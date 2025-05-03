@@ -158,6 +158,7 @@ int main() {
     for (int i = 0; i < 3; i++) {
         pthread_join(threads[i], NULL);
     }
+    printf("\033[1;32m🎉 All Express Deliveries have been delivered! 🎉\033[0m\n");
     
     sem_destroy(&sem);
     shmdt(shared_data);

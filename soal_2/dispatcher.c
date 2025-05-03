@@ -10,6 +10,13 @@
 #include <errno.h>  
 #include <time.h>
 
+#define RESET "\033[0m"
+#define RED "\033[31m"
+#define GREEN "\033[32m"
+#define YELLOW "\033[33m"
+#define BLUE "\033[34m"
+#define CYAN "\033[36m"
+#define ORANGE "\033[38;5;214m"  
 
 #define MAX_ORDERS 100
 #define MAX_STR 100
@@ -17,12 +24,11 @@
 #define FILE_NAME "delivery_order.csv"
 #define URL "https://drive.usercontent.google.com/u/0/uc?id=1OJfRuLgsBnIBWtdRXbRsD2sG6NhMKOg9&export=download"
 
-
 typedef struct {
     char nama[MAX_STR];
     char alamat[MAX_STR];
-    char tipe[MAX_STR];   // Express / Reguler
-    char status[MAX_STR]; // Pending / Delivered
+    char tipe[MAX_STR];
+    char status[MAX_STR];
 } Order;
 
 typedef struct {
@@ -43,16 +49,6 @@ void download_file() {
         exit(1);
     } else {
         wait(NULL);
-    }
-}
-
-void delShm() {
-    int shmid = shmget(SHM_KEY, sizeof(SharedData), 0666);
-    if (shmid != -1) {
-        shmctl(shmid, IPC_RMID, NULL);
-        printf("Shared memory deleted\n");
-    } else {
-        perror("shmget failed");
     }
 }
 
@@ -80,7 +76,7 @@ SharedData* init_shared_memory() {
         FILE *fp = fopen(FILE_NAME, "r");
 
         char line[256];
-        fgets(line, sizeof(line), fp); // skip header
+        fgets(line, sizeof(line), fp);
         data->count = 0;
 
         while (fgets(line, sizeof(line), fp) && data->count < MAX_ORDERS) {
@@ -107,58 +103,58 @@ SharedData* init_shared_memory() {
         exit(1);
     }
 }
+
 void printTable(SharedData *shared_data) {
-    // HEADER LOGO DALAM TABEL
-    printf("+-------------------------------------------------------------------------------------------------+\n");
-    printf("|                                                                                                 |\n");
-    printf("|         ██████╗ ██╗   ██╗███████╗██╗  ██╗ ██████╗  ██████╗     ███████╗██╗  ██╗██████╗          |\n");
-    printf("|         ██╔══██╗██║   ██║██╔════╝██║  ██║██╔════╝ ██╔═══██╗    ██╔════╝╚██╗██╔╝██╔══██╗         |\n");
-    printf("|         ██████╔╝██║   ██║███████╗███████║██║  ███╗██║   ██║    █████╗   ╚███╔╝ ██████╔╝         |\n");
-    printf("|         ██╔══██╗██║   ██║╚════██║██╔══██║██║   ██║██║   ██║    ██╔══╝   ██╔██╗ ██╔═══╝          |\n");
-    printf("|         ██║  ██║╚██████╔╝███████║██║  ██║╚██████╔╝╚██████╔╝    ███████╗██╔╝ ██╗██║              |\n");
-    printf("|         ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝  ╚═════╝     ╚══════╝╚═╝  ╚═╝╚═╝              |\n");
-    printf("|                                                                                                 |\n");
-    printf("+-------------------------------------------------------------------------------------------------+\n");
+    printf("%s┌──────────────────────────────────────────────────────────────────────────────────────────┐%s\n", CYAN, RESET);  
+    printf("%s│                                                                                          │%s\n", CYAN, RESET);
+    printf("%s│       %s██████╗ ██╗   ██╗███████╗██╗  ██╗ ██████╗  ██████╗     %s███████╗██╗  ██╗██████╗     %s│%s\n", CYAN, YELLOW, ORANGE, CYAN, RESET);
+    printf("%s│       %s██╔══██╗██║   ██║██╔════╝██║  ██║██╔════╝ ██╔═══██╗    %s██╔════╝╚██╗██╔╝██╔══██╗    %s│%s\n", CYAN, YELLOW, ORANGE, CYAN, RESET);
+    printf("%s│       %s██████╔╝██║   ██║███████╗███████║██║  ███╗██║   ██║    %s█████╗   ╚███╔╝ ██████╔╝    %s│%s\n", CYAN, YELLOW, ORANGE, CYAN, RESET);
+    printf("%s│       %s██╔══██╗██║   ██║╚════██║██╔══██║██║   ██║██║   ██║    %s██╔══╝   ██╔██╗ ██╔═══╝     %s│%s\n", CYAN, YELLOW, ORANGE, CYAN, RESET);
+    printf("%s│       %s██║  ██║╚██████╔╝███████║██║  ██║╚██████╔╝╚██████╔╝    %s███████╗██╔╝ ██╗██║         %s│%s\n", CYAN, YELLOW, ORANGE, CYAN, RESET);
+    printf("%s│       %s╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝  ╚═════╝     %s╚══════╝╚═╝  ╚═╝╚═╝         %s│%s\n", CYAN, YELLOW, ORANGE, CYAN, RESET);
+    printf("%s│                                                                                          │%s\n", CYAN, RESET);
+    printf("%s└──────────────────────────────────────────────────────────────────────────────────────────┘%s\n", CYAN, RESET);
 
-    // HEADER KOLOM
-    printf("+----+----------------------+----------------------+----------+-----------------------------------+\n");
-    printf("| No | Nama                 | Alamat               | Tipe     | Status                            |\n");
-    printf("+----+----------------------+----------------------+----------+-----------------------------------+\n");
+    printf("%s┌────┬────────────────────┬────────────────────┬──────────┬────────────────────────────────┐%s\n", CYAN, RESET);
+    printf("│ No │ %-18s │ %-18s │ %-8s │ %-30s │\n", "Nama", "Alamat", "Tipe", "Status");
+    printf("%s├────┼────────────────────┼────────────────────┼──────────┼────────────────────────────────┤%s\n", CYAN, RESET);
 
-    // ISI TABEL
     for (int i = 0; i < shared_data->count; i++) {
-        printf("| %2d | %-20s | %-20s | %-8s | %-33s |\n",
-               i + 1,
-               shared_data->orders[i].nama,
-               shared_data->orders[i].alamat,
-               shared_data->orders[i].tipe,
-               shared_data->orders[i].status);
-    }
+        const char *status_color = (strcmp(shared_data->orders[i].status, "Pending") == 0) ? RED : GREEN;
+        printf("%s│%s %2d %s│%s %-18s %s│%s %-18s %s│%s %-8s %s│%s %s%-30s%s %s│%s\n",
+               CYAN, RESET, i + 1, CYAN, RESET,
+               shared_data->orders[i].nama, CYAN, RESET,
+               shared_data->orders[i].alamat, CYAN, RESET,
+               shared_data->orders[i].tipe, CYAN, RESET,
+               status_color, shared_data->orders[i].status, RESET, CYAN, RESET);
+        }
 
-    // FOOTER
-    printf("+----+----------------------+----------------------+----------+-----------------------------------+\n");
-    printf("Total: %d order\n", shared_data->count);
+    printf("%s└────┴────────────────────┴────────────────────┴──────────┴────────────────────────────────┘%s\n", CYAN, RESET);
+    printf("Total: %d order %s📝\n", shared_data->count, CYAN);
 }
-
-void wrongForm(){
-    printf(" --- Unvalid Command ---\n");
-    printf("Correct Format: ./dispatcher -list\n");
-    printf("Correct Format: ./dispatcher -deliver <nama>\n");
-    printf("Correct Format: ./dispatcher -status <nama>\n");
+void wrongForm() {
+    printf("%s┌──────────────────────────────────────────────────────────┐%s\n", CYAN, RESET);  
+    printf("%s│%s                  %-40s%s│%s\n", CYAN, RED, " --- Unvalid Command --- ", CYAN, RESET);  
+    printf("%s├──────────────────────────────────────────────────────────┤%s\n", CYAN, RESET);  
+    printf("%s│%s%-45s%s             │%s\n", CYAN, GREEN, "Show List Customer: ./dispatcher -list", CYAN, RESET);
+    printf("%s│%s%-45s%s    │%s\n", CYAN, GREEN, "Send Package to Customer: ./dispatcher -deliver <nama>", CYAN, RESET);
+    printf("%s│%s%-45s%s        │%s\n", CYAN, GREEN, "Check Delivery Status: ./dispatcher -status <nama>", CYAN, RESET);
+    printf("%s│%s%-45s%s          │%s\n", CYAN, GREEN, "Delete Data from System Memory: ./dispatcher -rm", CYAN, RESET);
+    printf("%s└──────────────────────────────────────────────────────────┘%s\n", CYAN, RESET);  
 }
-
 void deliverReg(char *nama, SharedData *shared_data) {
     char *agent_name = getenv("USER");
     int found = 0;
     for (int i = 0; i < shared_data->count; i++) {
         if(strcmp(shared_data->orders[i].nama, nama) ==0 ) {
             if (strcmp(shared_data->orders[i].tipe, "Reguler") != 0) {
-                printf("Order %s bukan bertipe Reguler!\n", nama);
+                printf("%s❌ Order %s bukan bertipe Reguler! Harap periksa kembali tipe order.%s\n", RED, nama, RESET);
                 return;
             }
 
             if (strncmp(shared_data->orders[i].status, "Pending", 7) != 0) {
-                printf("Order %s already %s\n", nama, shared_data->orders[i].status);
+                printf("%s⚠️  Order %s has already been marked as %s%s. No further action is required.%s\n", YELLOW, nama, shared_data->orders[i].status, YELLOW, RESET);
                 return;
             }
 
@@ -177,6 +173,8 @@ void deliverReg(char *nama, SharedData *shared_data) {
                     shared_data->orders[i].nama,
                     shared_data->orders[i].alamat);
                 fclose(log);
+                printf("%s✈️  Order %s has been %sDELIVERED%s successfully! %s📦%s\n", GREEN, nama, CYAN, GREEN, ORANGE, RESET);
+
                 break;
             }
         }
@@ -187,12 +185,28 @@ void deliverReg(char *nama, SharedData *shared_data) {
 void statusShipment(char *nama, SharedData *shared_data) {
     for (int i = 0; i < shared_data->count; i++) {
         if (strcmp(shared_data->orders[i].nama, nama) == 0) {
-            printf("Status for %s: %s\n", nama, shared_data->orders[i].status);
+            printf("%s┌──────────────────────────────────────────────────────────────┐%s\n", CYAN, RESET);
+            printf("%s│%s                      %-18s%s                   │%s\n", CYAN, GREEN, "📦 Shipment Status 📦", CYAN, RESET);
+            printf("%s├──────────────────────────────────────────────────────────────┤%s\n", CYAN, RESET);
+            printf("%s│%s %-20s: %-38s %s│%s\n", CYAN, RESET, "Customer Name", shared_data->orders[i].nama, CYAN, RESET);
+            printf("%s│%s %-20s: %-38s %s│%s\n", CYAN, RESET, "Address", shared_data->orders[i].alamat, CYAN, RESET);
+            const char *type_color = (strcmp(shared_data->orders[i].tipe, "Express") == 0) ? BLUE : ORANGE;
+            printf("%s│%s %-20s: %s%-38s%s %s│%s\n", CYAN, RESET, "Order Type", type_color, shared_data->orders[i].tipe, RESET, CYAN, RESET);
+            const char *status_color = (strcmp(shared_data->orders[i].status, "Pending") == 0) ? RED : GREEN;
+            printf("%s│%s %-20s: %s%-38s%s %s│%s\n", CYAN, RESET, "Status", status_color, shared_data->orders[i].status, RESET, CYAN, RESET);
+            printf("%s└──────────────────────────────────────────────────────────────┘%s\n", CYAN, RESET);
             return;
         }
     }
     printf("Order %s Not Found\n", nama);
 }   
+void delshm(){
+    int shmid = shmget(SHM_KEY, 0, 0666);
+    shmctl(shmid, IPC_RMID, NULL);
+        printf("Shared memory deleted\n");
+        exit(0);
+
+}
 
 int main(int argc, char *argv[]) {
     SharedData *shared_data = init_shared_memory();
@@ -202,22 +216,16 @@ char *nama = NULL;
 
 
 for (int i = 1; i < argc; i++) {
-    if (argc == 2 && strcmp(argv[i], "-list") == 0) {
+    if (argc == 2) {
+        if (strcmp(argv[i], "-list") == 0){
         formtru = 1;
         printTable(shared_data);
         return 0;
-    }
-    else if(argc == 2 && strcmp(argv[i], "-rm") == 0) {
-        delShm();
-        return 0;
-    }
-    else if (strcmp(argv[i], "-deliver") == 0 || strcmp(argv[i], "-status") == 0) {
-        formtru = -1;
-        break;
-    }
-    else if (strcmp(argv[i], "-deliver") == 0 || strcmp(argv[i], "-status") == 0 && i + 1 < argc) {
-        formtru = 1;
-        break;
+        }
+        else  if (strcmp(argv[i], "-rm") == 0){ 
+            delshm();
+        }
+
     }
 
     if ((strcmp(argv[i], "-deliver") == 0 || strcmp(argv[i], "-status") == 0) && i + 1 < argc) {
@@ -239,7 +247,6 @@ if (formtru == -1) {
 }
 
 
-    int shmid = shmget(SHM_KEY, 0, 0666);
 
 
     shmdt(shared_data);
