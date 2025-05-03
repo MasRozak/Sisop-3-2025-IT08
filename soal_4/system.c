@@ -47,17 +47,17 @@ void initialize_memory(struct SystemData *data);
 
 void print_header(const char *title) {
     printf(YELLOW);
-    printf("╔════════════════════════════════════════════════════════════════╗\n");
+    printf("╔════════════════════════════════════════════════════════════════════════════════════════╗\n");
     printf(" %s", title);
     for(int i = strlen(title); i < 60; i++) printf(" ");
     printf("\n");
-    printf("╠════════════════════════════════════════════════════════════════╣\n");
+    printf("╠════════════════════════════════════════════════════════════════════════════════════════╣\n");
     printf(RESET);
 }
 
 void print_footer() {
     printf(YELLOW);
-    printf("╚════════════════════════════════════════════════════════════════╝\n");
+    printf("╚════════════════════════════════════════════════════════════════════════════════════════╝\n");
     printf(RESET);
     printf("\nPress Enter to continue...");
     getchar();
@@ -249,7 +249,7 @@ void generate_dungeon(struct SystemData *data) {
 
 void show_all_dungeons(struct SystemData *data) {
     printf(CLEAR_SCREEN);
-    print_header(MAGENTA "AVAILABLE DUNGEONS" YELLOW);
+    print_header(MAGENTA "                                    AVAILABLE DUNGEONS" YELLOW);
 
     if (data->num_dungeons == 0) {
         printf(" " RED "No dungeons available yet..." RESET "\n");
@@ -271,7 +271,7 @@ void show_all_dungeons(struct SystemData *data) {
 
     char opt;
     do {
-        printf("\nDo you want to delete a dungeon? (y/n): ");
+        printf("\n  Do you want to delete a dungeon? (y/n): ");
         scanf(" %c", &opt);
         getchar();
 
