@@ -165,6 +165,8 @@ void view_inventory(Player *p) {
     send_command(command, response, sizeof(response));
 
     char *line = strtok(response, "\n");
+    int line_count = 0;
+
     while (line) {
         int id;
         char name[50], status[100] = "";
@@ -172,13 +174,20 @@ void view_inventory(Player *p) {
             sscanf(line, "[%d] %[^;];EQUIPPED", &id, name);
             strcpy(status, "EQUIPPED");
         } else if (sscanf(line, "[%d] %[^;];Passive:%[^;]", &id, name, status) == 3) {
+            // status already parsed
         } else if (sscanf(line, "[%d] %[^;]", &id, name) == 2) {
             strcpy(status, "");
         }
+
+        int display_id = (line_count == 0) ? id : id + 1;
+
         printf(ANSI_BLUE " " ANSI_CYAN " %-2d " ANSI_BLUE "│" ANSI_GREEN " %-16s " ANSI_BLUE "│" ANSI_YELLOW "%-12s" ANSI_BLUE " \n", 
-               id, name, status);
+               display_id, name, status);
+
         line = strtok(NULL, "\n");
+        line_count++;
     }
+
     printf(ANSI_BLUE "└────┴──────────────────┴────────────────────────────┘\n" ANSI_RESET);
     printf(ANSI_CYAN "➤ Enter number to equip (0 to cancel): " ANSI_RESET);
 
@@ -186,8 +195,10 @@ void view_inventory(Player *p) {
     sscanf(input, "%d", &choice);
 
     if (choice == 0) return;
+
     snprintf(command, sizeof(command), "EQUIP %s %d", p->client_id, choice);
     send_command(command, response, sizeof(response));
+    
     if (strstr(response, "equipped")) {
         printf(ANSI_GREEN "✅ %s" ANSI_RESET, response);
     } else {
