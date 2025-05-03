@@ -1,5 +1,7 @@
 #include "shm_common.h"
 #include <stdbool.h>
+#include <signal.h>
+#include <unistd.h>
 
 #define RESET   "\033[0m"
 #define RED     "\033[1;31m"
@@ -169,46 +171,52 @@ void raid_dungeon(struct Hunter *hunter, struct SystemData *data) {
 void dungeon_notification(struct Hunter *hunter, struct SystemData *data) {
     signal(SIGINT, stop_notification);
     
-    printf(CLEAR_SCREEN);
-    print_header(CYAN "DUNGEON NOTIFICATION SYSTEM" YELLOW);
-    printf(" " GREEN "✓ " RESET "Notification started. Press Ctrl+C to stop.               \n");
-    print_footer();
+    running = 1;
+    int current_index = 0;
+    int toggle = 0;
     
     while (running) {
-        printf(CLEAR_SCREEN);
-        print_header(MAGENTA "LIVE DUNGEON UPDATES" YELLOW);
+        printf(CLEAR_SCREEN); 
+        printf(BLUE);
+        printf("╔══════════════════════════════════════════════════════════════════════════════╗\n");
+        printf("                " WHITE "                HUNTER TERMINAL" BLUE "                         \n");
+        printf("╠══════════════════════════════════════════════════════════════════════════════╣\n");
         
-        int found = 0;
-        for (int i = 0; i < data->num_dungeons; i++) {
-            found++;
-            printf(" " CYAN "[%d]" RESET " %-20s | " YELLOW "Min Lv:" RESET "%d | " MAGENTA "EXP:" RESET "%3d | " 
-                   RED "ATK:" RESET "%3d | " GREEN "HP:" RESET "%3d | " BLUE "DEF:" RESET "%2d \n",
-                i + 1,
-                data->dungeons[i].name,
-                data->dungeons[i].min_level,
-                data->dungeons[i].exp,
-                data->dungeons[i].atk,
-                data->dungeons[i].hp,
-                data->dungeons[i].def
-            );
+        if (data->num_dungeons > 0) {
+            if (toggle % 2 == 0) {
+                printf(MAGENTA "  🌟 Dungeon Alert!🌟 " RESET);
+            } else {
+                printf(YELLOW "  ⚡ Dungeon Allert!⚡ " RESET);
+            }
+            
+            printf(GREEN "An " CYAN "%s" GREEN " for minimum level " YELLOW "%d" GREEN " open\n" RESET,
+                   data->dungeons[current_index].name,
+                   data->dungeons[current_index].min_level);
+                   
+            data->current_notification_index = current_index;
+        } else {
+            printf(RED "No dungeons available\n" RESET);
         }
         
-        if (!found) {
-            printf(" " RED "No available dungeon for your level." RESET "                     \n");
-            printf(" " YELLOW "Try to level up to access more dungeons!" RESET "                  \n");
+        printf("╠══════════════════════════════════════════════════════════════════════════════╣\n");
+        printf("  " WHITE "1" BLUE " 📊  " WHITE "Show My Stats\n");
+        printf("  " WHITE "2" BLUE " 🔍  " WHITE "Show Available Dungeons\n");
+        printf("  " WHITE "3" BLUE " ⚔️  " WHITE "Raid Dungeon\n");
+        printf("  " WHITE "4" BLUE " 🏆  " WHITE "Battle Another Hunter\n");
+        printf("  " WHITE "5" BLUE " 🔔  " WHITE "Start Dungeon Notification\n");
+        printf("  " WHITE "6" BLUE " 🚪  " WHITE "Exit\n");
+        printf("╚══════════════════════════════════════════════════════════════════════════════╝\n");
+        printf(WHITE "Logged in as: " CYAN "%s" WHITE " (Level %d)\n" RESET, hunter->username, hunter->level);
+        printf("\nPress Ctrl+C to stop notifications\n");
+
+        if (data->num_dungeons > 0) {
+            current_index = (current_index + 1) % data->num_dungeons;
         }
         
-        printf("                                                                \n");
-        printf(" " BLUE "Refreshing in 3 seconds..." RESET " (Press Ctrl+C to stop)          \n");
-        printf(YELLOW "╚════════════════════════════════════════════════════════════════╝\n" RESET);
-        
-        sleep(3);
+        toggle++; 
+        fflush(stdout); 
+        sleep(3); 
     }
-    
-    printf(CLEAR_SCREEN);
-    print_header(RED "NOTIFICATION STOPPED" YELLOW);
-    printf(" Dungeon notification service has been stopped.                \n");
-    print_footer();
 }
 
 void battle(struct Hunter *self, struct SystemData *data) {
@@ -484,16 +492,29 @@ int main() {
     while (1) {
         printf(CLEAR_SCREEN);
         printf(BLUE);
-        printf("╔════════════════════════════════════════════════════════════════╗\n");
-        printf("                    " WHITE "HUNTER TERMINAL" BLUE "                         \n");
-        printf("╠════════════════════════════════════════════════════════════════╣\n");
+        printf("╔══════════════════════════════════════════════════════════════════════════════╗\n");
+        printf("                " WHITE "                HUNTER TERMINAL" BLUE "                         \n");
+        printf("╠══════════════════════════════════════════════════════════════════════════════╣\n");
+
+        if (data->num_dungeons > 0) {
+            int display_index = data->current_notification_index % data->num_dungeons;
+            printf(GREEN "    🌟 Dungeon Alert!🌟 An " CYAN "%s" GREEN " for minimum level " YELLOW "%d" GREEN " open\n" RESET,
+                   data->dungeons[display_index].name,
+                   data->dungeons[display_index].min_level);
+            
+            data->current_notification_index = (data->current_notification_index + 1) % data->num_dungeons;
+        } else {
+            printf(RED "No dungeons available\n" RESET);
+        }
+
+        printf("╠══════════════════════════════════════════════════════════════════════════════╣\n");
         printf("  " WHITE "1" BLUE " 📊  " WHITE "Show My Stats\n");
         printf("  " WHITE "2" BLUE " 🔍  " WHITE "Show Available Dungeons\n");
         printf("  " WHITE "3" BLUE " ⚔️  " WHITE "Raid Dungeon\n");
         printf("  " WHITE "4" BLUE " 🏆  " WHITE "Battle Another Hunter\n");
         printf("  " WHITE "5" BLUE " 🔔  " WHITE "Start Dungeon Notification\n");
         printf("  " WHITE "6" BLUE " 🚪  " WHITE "Exit\n");
-        printf("╚════════════════════════════════════════════════════════════════╝\n");
+        printf("╚══════════════════════════════════════════════════════════════════════════════╝\n");
         printf(WHITE "Logged in as: " CYAN "%s" WHITE " (Level %d)\n" RESET, me->username, me->level);
         printf("Enter your choice: ");
 
@@ -514,7 +535,10 @@ int main() {
             case 2: show_dungeons(me, data); break;
             case 3: raid_dungeon(me, data); break;
             case 4: battle(me, data); break;
-            case 5: dungeon_notification(me, data); break;
+            case 5: 
+                printf("\n" GREEN "✓ Notification started. Press Ctrl+C to stop.\n" RESET);
+                dungeon_notification(me, data);
+                break;
             case 6:
                 printf(CLEAR_SCREEN);
                 print_header(YELLOW "LOGGING OUT");
