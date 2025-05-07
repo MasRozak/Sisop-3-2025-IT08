@@ -696,3 +696,457 @@ if (strcmp(input, "exit") == 0) {
     printf(ANSI_RED "⚠ Invalid command. Please type 'attack' or 'exit'.\n" ANSI_RESET);
 }
 ```
+
+
+## Soal 4
+[Author: Rafa / kookoon]
+
+Di dunia yang sedang kacau ini, muncul seorang hunter lemah bernama Sung Jin Woo😈yang bahkan tidak bisa mengangkat sebuah galon🛢️. Suatu hari, hunter ini tertabrak sebuah truk dan meninggal di tempat. Dia pun marah akan dirinya yang lemah dan berharap mendapat kesempatan kedua. Beruntungnya, Sung Jin Woo pun mengalami reinkarnasi dan sekarang bekerja sebagai seorang admin. Uniknya, pekerjaan ini mempunyai sebuah sistem yang bisa melakukan tracking pada seluruh aktivitas dan keadaan seseorang. Sayangnya, model yang diberikan oleh Bos-nya sudah sangat tua sehingga program tersebut harus dimodifikasi agar tidak ketinggalan zaman, dengan spesifikasi:
+
+a. Agar hunter lain tidak bingung, Sung Jin Woo memutuskan untuk membuat dua file, yaitu system.c dan hunter.c. Sung Jin Woo mendapat peringatan bahwa system.c merupakan shared memory utama yang mengelola shared memory hunter-hunter dari hunter.c. Untuk mempermudahkan pekerjaannya, Sung Jin Woo mendapat sebuah clue yang dapat membuat pekerjaannya menjadi lebih mudah dan efisien. NOTE : hunter bisa dijalankan ketika sistem sudah dijalankan.
+
+```bash
+// system.c
+int shmid;
+void cleanup_shared_memory() {
+    printf("Cleaning up shared memory...\n");
+    struct SystemData *data = shmat(shmid, NULL, 0);
+    if (data != (void*)-1) {
+        shmdt(data);
+    }
+    if (shmctl(shmid, IPC_RMID, NULL) == -1) {
+        perror("Failed to delete shared memory");
+        printf("shmid: %d, errno: %d\n", shmid, errno);
+    } else {
+        printf("✓ Shared memory deleted (ID: %d)\n", shmid);
+    }
+}
+int main() {
+    signal(SIGINT, handle_signal);
+    signal(SIGTERM, handle_signal);
+    srand(time(NULL));
+    key_t key = get_system_key();
+    shmid = shmget(key, sizeof(struct SystemData), IPC_CREAT | 0666);
+    if (shmid == -1) {
+        perror("shmget failed");
+        exit(1);
+    }
+    printf(GREEN "✓ " RESET "Shared memory created with ID: %d\n", shmid);
+    struct SystemData *data = shmat(shmid, NULL, 0);
+    if (data == (void *) -1) {
+        printf(RED "ERROR: Could not attach to memory\n" RESET);
+        perror("shmat");
+        exit(1);
+    }
+    initialize_memory(data);
+    // Menu admin...
+}
+```
+- Sistem terbagi menjadi `system.c` (antarmuka admin) dan `hunter.c` (antarmuka hunter). `system.c` membuat shared memory dengan `shmget` dan menginisialisasinya dengan `initialize_memory`. `hunter.c` terhubung ke shared memory yang sama. Fungsi `cleanup_shared_memory` menghapus shared memory saat sistem dimatikan, mencegah kebocoran data. Ini memastikan `hunter.c` hanya berfungsi setelah `system.c` menginisialisasi shared memory.
+
+
+b. Untuk memastikan keteraturan sistem, Sung Jin Woo memutuskan untuk membuat fitur registrasi dan login di program hunter. Setiap hunter akan memiliki key unik dan stats awal (Level=1, EXP=0, ATK=10, HP=100, DEF=5). Data hunter disimpan dalam shared memory tersendiri yang terhubung dengan sistem.
+
+```bash
+// hunter.c
+struct Hunter* register_hunter(struct SystemData *data) {
+    char uname[50];
+    printf(" Buat username baru: ");
+    scanf("%s", uname);
+    getchar();
+    for (int i = 0; i < data->num_hunters; i++) {
+        if (strcmp(data->hunters[i].username, uname) == 0) {
+            printf(RED "❌ Username sudah digunakan.\n" RESET);
+            sleep(2);
+            return NULL;
+        }
+    }
+    if (data->num_hunters >= MAX_HUNTERS) {
+        printf(RED "❌ Server penuh. Tidak bisa mendaftar lagi.\n" RESET);
+        sleep(2);
+        return NULL;
+    }
+    struct Hunter *new_hunter = &data->hunters[data->num_hunters];
+    strcpy(new_hunter->username, uname);
+    new_hunter->level = 1;
+    new_hunter->exp = 0;
+    new_hunter->atk = 10;
+    new_hunter->hp = 100;
+    new_hunter->def = 5;
+    new_hunter->banned = 0;
+    new_hunter->shm_key = get_system_key();
+    data->num_hunters++;
+    printf(GREEN "✓ Akun berhasil dibuat! Selamat datang, %s!\n" RESET, uname);
+    sleep(2);
+    return new_hunter;
+}
+```
+Fungsi `register_hunter` membuat akun baru dengan memeriksa keunikan username dan batas hunter (`MAX_HUNTERS`). Hunter baru diinisialisasi dengan stats awal dan disimpan di shared memory. Fungsi `login` memverifikasi username dan memeriksa status banned. Kedua fungsi memberikan pesan kesalahan untuk input tidak valid, memastikan data konsisten di shared memory.
+
+c. Agar dapat memantau perkembangan para hunter dengan mudah, Sung Jin Woo menambahkan fitur di sistem yang dapat menampilkan informasi semua hunter yang terdaftar, termasuk nama hunter, level, exp, atk, hp, def, dan status (banned atau tidak). Ini membuat dia dapat melihat siapa hunter terkuat dan siapa yang mungkin melakukan kecurangan.
+
+```bash
+// system.c
+void show_all_hunters(struct SystemData *data) {
+    printf(CLEAR_SCREEN);
+    print_header(CYAN "REGISTERED HUNTERS LIST" YELLOW);
+    if (data->num_hunters == 0) {
+        printf(" " RED "No hunters registered yet..." RESET "                             \n");
+    } else {
+        for (int i = 0; i < data->num_hunters; i++) {
+            char status[20];
+            sprintf(status, "%s", data->hunters[i].banned ? RED "BANNED" RESET : GREEN "ACTIVE" RESET);
+            printf(" " CYAN "[%d]" RESET " %-20s | " YELLOW "Lv:" RESET "%2d | " YELLOW "EXP:" RESET "%3d | " 
+                   RED "ATK:" RESET "%3d | " GREEN "HP:" RESET "%3d | " BLUE "DEF:" RESET "%2d | %-10s \n", 
+                i + 1, data->hunters[i].username, data->hunters[i].level, data->hunters[i].exp,
+                data->hunters[i].atk, data->hunters[i].hp, data->hunters[i].def, status);
+        }
+    }
+    print_footer();
+}
+```
+Fungsi `show_all_hunters` menampilkan daftar hunter dengan detail stats dan status. Jika tidak ada hunter, pesan ditampilkan. Fitur ini memungkinkan admin memantau perkembangan hunter dan mendeteksi kecurangan berdasarkan stats tinggi atau status banned.
+
+d. Setelah beberapa hari bekerja, Sung Jin Woo menyadari bahwa para hunter membutuhkan tempat untuk berlatih dan memperoleh pengalaman. Ia memutuskan untuk membuat fitur unik dalam sistem yang dapat menghasilkan dungeon secara random dengan nama, level minimal hunter, dan stat rewards dengan nilai:
+- 🏆Level Minimal : 1 - 5
+- ⚔️ATK : 100 - 150 Poin
+- ❤️HP  : 50 - 100 Poin
+- 🛡️DEF : 25 - 50 Poin
+- 🌟EXP : 150 - 300 Poin
+Setiap dungeon akan disimpan dalam shared memory sendiri yang berbeda dan dapat diakses oleh hunter.
+
+```bash
+// system.c
+void generate_dungeon(struct SystemData *data) {
+    printf(CLEAR_SCREEN);
+    print_header(MAGENTA "GENERATE NEW DUNGEON" YELLOW);
+    char *names[] = {"Demon Castle", "Shadow Temple", "Ant Nest", "Dragon Lair", "Cursed Forest",
+                    "Haunted Mansion", "Goblin Cave", "Mystic Shrine", "Pirate Bay", "Underworld"};
+    char *difficulty[] = {"Easy", "Normal", "Hard", "Expert", "Master"};
+    int idx = rand() % 10;
+    int diff = rand() % 5;
+    if (data->num_dungeons >= MAX_DUNGEONS) {
+        printf(" " RED "No more space for dungeons! Maximum reached (%d)." RESET "         \n", MAX_DUNGEONS);
+        print_footer();
+        return;
+    }
+    struct Dungeon *new_dungeon = &data->dungeons[data->num_dungeons];
+    char full_name[50];
+    snprintf(full_name, sizeof(full_name), "%s (%s)", names[idx], difficulty[diff]);
+    strncpy(new_dungeon->name, full_name, sizeof(new_dungeon->name) - 1);
+    new_dungeon->min_level = diff + 1;
+    new_dungeon->exp = (rand() % 101) + 100 + (diff * 50);
+    new_dungeon->atk = (rand() % 31) + 10 + (diff * 20);
+    new_dungeon->hp = (rand() % 51) + 50 + (diff * 20);
+    new_dungeon->def = (rand() % 16) + 10 + (diff * 5);
+    new_dungeon->shm_key = get_system_key();
+    data->num_dungeons++;
+    printf(" " GREEN "⚔️  Dungeon Created Successfully! ⚔️" RESET "                       \n");
+    printf(" " CYAN "Name:      " RESET "%s                              \n", new_dungeon->name);
+    print_footer();
+}
+```
+Fungsi `generate_dungeon` membuat dungeon acak dengan nama dan difficulty acak. Stats dihitung berdasarkan rentang yang ditentukan, disimpan di shared memory untuk akses hunter. Batas `MAX_DUNGEONS` mencegah kelebihan dungeon, dengan pesan kesalahan jika penuh.
+
+e. Untuk memudahkan admin dalam memantau dungeon yang muncul, Sung Jin Woo menambahkan fitur yang menampilkan informasi detail semua dungeon. Fitur ini menampilkan daftar lengkap dungeon beserta nama, level minimum, reward (EXP, ATK, HP, DEF), dan key unik untuk masing-masing dungeon.
+
+```bash
+// system.c
+void show_all_dungeons(struct SystemData *data) {
+    printf(CLEAR_SCREEN);
+    print_header(MAGENTA "                                    AVAILABLE DUNGEONS" YELLOW);
+    if (data->num_dungeons == 0) {
+        printf(" " RED "No dungeons available yet..." RESET "\n");
+        print_footer();
+        return;
+    }
+    for (int i = 0; i < data->num_dungeons; i++) {
+        printf(" " MAGENTA "[%d]" RESET " %-25s | Min Lv:%2d | EXP:%3d | ATK:+%2d | HP:+%3d | DEF:+%2d\n",
+            i + 1, data->dungeons[i].name, data->dungeons[i].min_level, data->dungeons[i].exp,
+            data->dungeons[i].atk, data->dungeons[i].hp, data->dungeons[i].def);
+    }
+    char opt;
+    do {
+        printf("\n  Do you want to delete a dungeon? (y/n): ");
+        scanf(" %c", &opt);
+        getchar();
+        if (opt == 'y' || opt == 'Y') {
+            int del_idx;
+            printf("Enter the dungeon number to delete: ");
+            scanf("%d", &del_idx);
+            getchar();
+            if (del_idx < 1 || del_idx > data->num_dungeons) {
+                printf(RED "Invalid dungeon number!\n" RESET);
+            } else {
+                del_idx--;
+                printf(YELLOW "Deleting dungeon: %s...\n" RESET, data->dungeons[del_idx].name);
+                for (int i = del_idx; i < data->num_dungeons - 1; i++) {
+                    data->dungeons[i] = data->dungeons[i + 1];
+                }
+                data->num_dungeons--;
+                printf(GREEN "Dungeon [%d] has been deleted.\n" RESET, del_idx + 1);
+            }
+        }
+    } while ((opt == 'y' || opt == 'Y') && data->num_dungeons > 0);
+    print_footer();
+}
+```
+Fungsi `show_all_dungeons` menampilkan daftar dungeon dengan detail dan memungkinkan admin menghapus dungeon dengan memilih nomor. Penanganan kesalahan memastikan nomor valid, dan perubahan disimpan di shared memory.
+
+f. Pada saat yang sama, dungeon yang dibuat oleh sistem juga harus dapat diakses oleh hunter. Sung Jin Woo menambahkan fitur yang menampilkan semua dungeon yang tersedia sesuai dengan level hunter. Disini, hunter hanya dapat menampilkan dungeon dengan level minimum yang sesuai dengan level mereka.
+
+```bash
+// hunter.c
+void show_dungeons(struct Hunter *hunter, struct SystemData *data) {
+    printf(CLEAR_SCREEN);
+    print_header(MAGENTA "AVAILABLE DUNGEONS" YELLOW);
+    int found = 0;
+    for (int i = 0; i < data->num_dungeons; i++) {
+        if (hunter->level >= data->dungeons[i].min_level) {
+            found++;
+            printf(" " CYAN "[%d]" RESET " %-20s | " YELLOW "Min Lv:" RESET "%d | " MAGENTA "EXP:" RESET "%3d | " 
+                   RED "ATK:" RESET "%3d | " GREEN "HP:" RESET "%3d | " BLUE "DEF:" RESET "%2d \n",
+                i + 1, data->dungeons[i].name, data->dungeons[i].min_level, data->dungeons[i].exp,
+                data->dungeons[i].atk, data->dungeons[i].hp, data->dungeons[i].def);
+        }
+    }
+    if (!found) {
+        printf(" " RED "No available dungeon for your level." RESET "                     \n");
+        printf(" " YELLOW "Try to level up to access more dungeons!" RESET "                  \n");
+    }
+    print_footer();
+}
+```
+Fungsi `show_dungeons` hanya menampilkan dungeon yang sesuai dengan level hunter (`hunter->level >= dungeon->min_level`). Jika tidak ada dungeon yang tersedia, pesan ditampilkan untuk menyarankan naik level. Data diambil dari shared memory untuk akses real-time.
+
+g. Setelah melihat beberapa hunter yang terlalu kuat, Sung Jin Woo memutuskan untuk menambahkan fitur untuk menguasai dungeon. Ketika hunter berhasil menaklukan sebuah dungeon, dungeon tersebut akan menghilang dari sistem dan hunter akan mendapatkan stat rewards dari dungeon. Jika exp hunter mencapai 500, mereka akan naik level dan exp kembali ke 0.
+
+```bash
+// hunter.c
+void raid_dungeon(struct Hunter *hunter, struct SystemData *data) {
+    printf(CLEAR_SCREEN);
+    print_header(GREEN "RAID DUNGEON" YELLOW);
+    int found = 0;
+    for (int i = 0; i < data->num_dungeons; i++) {
+        if (hunter->level >= data->dungeons[i].min_level) {
+            found++;
+            printf(" " CYAN "[%d]" RESET " %-20s | " YELLOW "Min Lv:" RESET "%d | " MAGENTA "EXP:" RESET "%3d | " 
+                   RED "ATK:" RESET "%3d | " GREEN "HP:" RESET "%3d | " BLUE "DEF:" RESET "%2d \n",
+                i + 1, data->dungeons[i].name, data->dungeons[i].min_level, data->dungeons[i].exp,
+                data->dungeons[i].atk, data->dungeons[i].hp, data->dungeons[i].def);
+        }
+    }
+    if (!found) {
+        printf(" " RED "No available dungeon for your level." RESET "                     \n");
+        print_footer();
+        return;
+    }
+    printf(" Choose dungeon to raid (number): ");
+    int id;
+    scanf("%d", &id);
+    getchar();
+    id--;
+    if (id < 0 || id >= data->num_dungeons || hunter->level < data->dungeons[id].min_level) {
+        printf(" " RED "Invalid dungeon selected. Please try again." RESET "               \n");
+        print_footer();
+        return;
+    }
+    hunter->exp += data->dungeons[id].exp;
+    hunter->atk += data->dungeons[id].atk;
+    hunter->hp += data->dungeons[id].hp;
+    hunter->def += data->dungeons[id].def;
+    bool level_up = false;
+    if (hunter->exp >= 500) {
+        hunter->level++;
+        hunter->exp = 0;
+        level_up = true;
+    }
+    for (int i = id; i < data->num_dungeons - 1; i++) {
+        data->dungeons[i] = data->dungeons[i + 1];
+    }
+    data->num_dungeons--;
+    printf(" " GREEN "⚔️  DUNGEON CLEARED SUCCESSFULLY! ⚔️" RESET "                       \n");
+    print_footer();
+}
+```
+Fungsi `raid_dungeon` memungkinkan hunter memilih dungeon yang sesuai level, memberikan rewards, dan menghapus dungeon dari shared memory. Jika EXP mencapai 500, hunter naik level. Penanganan kesalahan memastikan pilihan dungeon valid.
+
+h. Karena persaingan antar hunter semakin ketat, Sung Jin Woo mengimplementasikan fitur dimana hunter dapat memilih untuk bertarung dengan hunter lain. Tingkat kekuatan seorang hunter bisa dihitung melalui total stats yang dimiliki hunter tersebut (ATK+HP+DEF). Jika hunter menang, maka hunter tersebut akan mendapatkan semua stats milik lawan dan lawannya akan terhapus dari sistem. Jika kalah, hunter tersebutlah yang akan dihapus dari sistem dan semua statsnya akan diberikan kepada hunter yang dilawannya.
+
+```bash
+// hunter.c
+void battle(struct Hunter *self, struct SystemData *data) {
+    printf(CLEAR_SCREEN);
+    print_header(RED "HUNTER BATTLE ARENA" YELLOW);
+    int available = 0;
+    for (int i = 0; i < data->num_hunters; i++) {
+        if (strcmp(data->hunters[i].username, self->username) != 0) {
+            available++;
+            printf(" " CYAN "[%d]" RESET " %-20s | " YELLOW "Lv:" RESET "%2d | " 
+                   RED "ATK:" RESET "%3d | " GREEN "HP:" RESET "%3d | " BLUE "DEF:" RESET "%2d        \n",
+                i, data->hunters[i].username, data->hunters[i].level, data->hunters[i].atk,
+                data->hunters[i].hp, data->hunters[i].def);
+        }
+    }
+    if (!available) {
+        printf(" " RED "No other hunters available to battle." RESET "                     \n");
+        print_footer();
+        return;
+    }
+    printf(" Choose target (index): ");
+    int target;
+    scanf("%d", &target);
+    getchar();
+    if (target < 0 || target >= data->num_hunters || strcmp(data->hunters[target].username, self->username) == 0) {
+        printf(" " RED "Invalid target selection. Please try again." RESET "               \n");
+        print_footer();
+        return;
+    }
+    int self_power = self->atk + self->hp + self->def;
+    int target_power = data->hunters[target].atk + data->hunters[target].hp + data->hunters[target].def;
+    if (self_power > target_power) {
+        self->atk += data->hunters[target].atk;
+        self->hp += data->hunters[target].hp;
+        self->def += data->hunters[target].def;
+        for (int i = target; i < data->num_hunters - 1; i++) {
+            data->hunters[i] = data->hunters[i + 1];
+        }
+        data->num_hunters--;
+        printf(" " GREEN "🏆 VICTORY! " RESET "You defeated %s and gained their powers!      \n", 
+               data->hunters[target].username);
+    } else if (self_power < target_power) {
+        for (int i = 0; i < data->num_hunters; i++) {
+            if (strcmp(data->hunters[i].username, data->hunters[target].username) == 0) {
+                data->hunters[i].atk += self->atk;
+                data->hunters[i].hp += self->hp;
+                data->hunters[i].def += self->def;
+                break;
+            }
+        }
+        for (int i = 0; i < data->num_hunters; i++) {
+            if (strcmp(data->hunters[i].username, self->username) == 0) {
+                for (int j = i; j < data->num_hunters - 1; j++) {
+                    data->hunters[j] = data->hunters[j + 1];
+                }
+                data->num_hunters--;
+                break;
+            }
+        }
+        printf(" " RED "❌ DEFEAT! " RESET "You lost to %s and your account is deleted!    \n", 
+               data->hunters[target].username);
+        print_footer();
+        exit(0);
+    } else {
+        printf(" " YELLOW "DRAW! No winner, battle ends in a tie.\n" RESET);
+    }
+    print_footer();
+}
+```
+Fungsi `battle` memungkinkan hunter memilih lawan dan membandingkan total stats. Pemenang mendapat stats lawan, dan yang kalah dihapus dari shared memory. Jika seri, tidak ada perubahan. Penanganan kesalahan memastikan pilihan lawan valid.
+
+i. Saat sedang memonitoring sistem, Sung Jin Woo melihat beberapa hunter melakukan kecurangan di dalam sistem. Ia menambahkan fitur di sistem yang membuat dia dapat melarang hunter tertentu untuk melakukan raid atau battle. Karena masa percobaan tak bisa berlangsung selamanya 😇, Sung Jin Woo pun juga menambahkan konfigurasi agar fiturnya dapat memperbolehkan hunter itu melakukan raid atau battle lagi.
+
+j. Setelah beberapa pertimbangan, untuk memberikan kesempatan kedua bagi hunter yang ingin bertobat dan memulai dari awal, Sung Jin Woo juga menambahkan fitur di sistem yang membuat dia bisa mengembalikan stats hunter tertentu ke nilai awal. 
+
+```bash
+// system.c
+void ban_or_unban(struct SystemData *data) {
+    printf(CLEAR_SCREEN);
+    print_header(RED "BAN/UNBAN HUNTER" YELLOW);
+    printf(" " CYAN "Current Hunters:" RESET "                                        \n");
+    for (int i = 0; i < data->num_hunters; i++) {
+        char status[20];
+        sprintf(status, "%s", data->hunters[i].banned ? RED "BANNED" RESET : GREEN "ACTIVE" RESET);
+        printf(" " CYAN "[%d]" RESET " %-20s | %-10s                      \n", 
+            i + 1, data->hunters[i].username, status);
+    }
+    printf(" Enter hunter username to toggle ban: ");
+    char name[50];
+    scanf("%s", name);
+    getchar();
+    int found = 0;
+    for (int i = 0; i < data->num_hunters; i++) {
+        if (strcmp(data->hunters[i].username, name) == 0) {
+            data->hunters[i].banned = !data->hunters[i].banned;
+            found = 1;
+            printf(" " YELLOW "Hunter %s is now %s" RESET "                              \n", 
+                   name, data->hunters[i].banned ? RED "BANNED" RESET : GREEN "UNBANNED" RESET);
+            break;
+        }
+    }
+    if (!found) {
+        printf(" " RED "Hunter not found. Please check the username." RESET "               \n");
+    }
+    print_footer();
+}
+```
+Fungsi `ban_or_unban` mengubah status banned hunter, mencegah atau mengizinkan raid/battle. Fungsi `reset_hunter_stats` mengembalikan stats ke awal (Level=1, EXP=0, ATK=10, HP=100, DEF=5, banned=0). Kedua fungsi memperbarui shared memory dan menangani kesalahan untuk username tidak valid.
+
+k. Untuk membuat sistem lebih menarik dan tidak membosankan, Sung Jin Woo menambahkan fitur notifikasi dungeon di setiap hunter. Saat diaktifkan, akan muncul informasi tentang semua dungeon yang terbuka dan akan terus berganti setiap 3 detik.
+
+```bash
+// hunter.c
+void dungeon_notification(struct Hunter *hunter, struct SystemData *data) {
+    signal(SIGINT, stop_notification);
+    running = 1;
+    int current_index = 0;
+    int toggle = 0;
+    while (running) {
+        check_banned_status(hunter, data);
+        printf(CLEAR_SCREEN);
+        printf(BLUE);
+        printf("╔══════════════════════════════════════════════════════════════════════════════╗\n");
+        printf("                " WHITE "                HUNTER TERMINAL" BLUE "                         \n");
+        printf("╠══════════════════════════════════════════════════════════════════════════════╣\n");
+        if (data->num_dungeons > 0) {
+            if (toggle % 2 == 0) {
+                printf(MAGENTA "  🌟 Dungeon Alert!🌟 " RESET);
+            } else {
+                printf(YELLOW "  ⚡ Dungeon Alert!⚡ " RESET);
+            }
+            printf(GREEN "An " CYAN "%s" GREEN " for minimum level " YELLOW "%d" GREEN " open\n" RESET,
+                   data->dungeons[current_index].name, data->dungeons[current_index].min_level);
+            data->current_notification_index = current_index;
+        } else {
+            printf(RED "No dungeons available\n" RESET);
+        }
+        printf("╠══════════════════════════════════════════════════════════════════════════════╣\n");
+        printf("  " WHITE "1" BLUE " 📊  " WHITE "Show My Stats\n");
+        printf("  " WHITE "2" BLUE " 🔍  " WHITE "Show Available Dungeons\n");
+        printf("  " WHITE "3" BLUE " ⚔️  " WHITE "Raid Dungeon\n");
+        printf("  " WHITE "4" BLUE " 🏆  " WHITE "Battle Another Hunter\n");
+        printf("  " WHITE "5" BLUE " 🔔  " WHITE "Start Dungeon Notification\n");
+        printf("  " WHITE "6" BLUE " 🚪  " WHITE "Exit\n");
+        printf("╚══════════════════════════════════════════════════════════════════════════════╝\n");
+        printf(WHITE "Logged in as: " CYAN "%s" WHITE " (Level %d)\n" RESET, hunter->username, hunter->level);
+        printf("\nPress Ctrl+C to stop notifications\n");
+        if (data->num_dungeons > 0) {
+            current_index = (current_index + 1) % data->num_dungeons;
+        }
+        toggle++;
+        fflush(stdout);
+        sleep(3);
+    }
+}
+```
+Fungsi `dungeon_notification` menampilkan notifikasi dungeon setiap 3 detik, berpindah antar dungeon di shared memory. Warna notifikasi berganti untuk daya tarik visual. Notifikasi berhenti dengan Ctrl+C, dan status banned diperiksa setiap siklus.
+
+l. Terakhir, untuk menambah keamanan sistem agar data hunter tidak bocor, Sung Jin Woo melakukan konfigurasi agar setiap kali sistem dimatikan, maka semua shared memory yang sedang berjalan juga akan ikut terhapus. 
+
+```bash
+// system.c
+void cleanup_shared_memory() {
+    printf("Cleaning up shared memory...\n");
+    struct SystemData *data = shmat(shmid, NULL, 0);
+    if (data != (void*)-1) {
+        shmdt(data);
+    }
+    if (shmctl(shmid, IPC_RMID, NULL) == -1) {
+        perror("Failed to delete shared memory");
+        printf("shmid: %d, errno: %d\n", shmid, errno);
+    } else {
+        printf("✓ Shared memory deleted (ID: %d)\n", shmid);
+    }
+}
+```
+Fungsi `cleanup_shared_memory` menghapus shared memory dengan `shmctl` saat sistem dimatikan melalui `SIGINT` atau `SIGTERM`. Ini memastikan tidak ada data hunter atau dungeon yang tersisa, meningkatkan keamanan sistem.
