@@ -449,6 +449,9 @@ void battle_mode(Player *p) {
 2. Damage Equation: 
 Untuk damage, gunakan base damage sebagai kerangka awal dan tambahkan rumus damage apapun (dibebaskan, yang pasti perlu random number agar hasil damage bervariasi). Lalu buatlah logic agar setiap serangan memiliki kesempatan untuk Critical yang membuat damage anda 2x lebih besar.
 
+3. Passive: 
+Jika senjata yang dipakai memiliki Passive setiap kali passive tersebut menyala, maka tunjukan bahwa passive tersebut aktif.
+
 ```bash
 // dungeon.c
 void battle_mode(Player *p) {
@@ -534,10 +537,12 @@ void battle_mode(Player *p) {
     - Staff of Light: Jika instan kill (10% peluang) terjadi, pesan "Staff of Light Passive: Instant Kill Activated!" ditampilkan, dan damage disetel ke HP musuh untuk membunuh langsung.
   - Output: Pesan damage mencakup informasi critical atau passive untuk kejelasan. Jika tidak ada critical atau passive, pesan standar menunjukkan damage yang diberikan.
 
-3. Passive: 
-Jika senjata yang dipakai memiliki Passive setiap kali passive tersebut menyala, maka tunjukan bahwa passive tersebut aktif.
+h. Error Handling
+Berikan error handling untuk opsi-opsi yang tidak ada.
 
-    - Menu Utama (Error Handling untuk Pilihan Tidak Valid)
+    1. Menu Utama (Error Handling untuk Pilihan Tidak Valid)
+        - Input Tidak Valid: Fungsi sscanf memeriksa apakah input adalah angka. Jika bukan (misalnya, huruf atau simbol), pesan kesalahan ditampilkan: "Invalid input. Please enter a number between 1 and 5."
+        - Pilihan di Luar Rentang: Jika angka di luar 1–5, pernyataan default dalam switch menampilkan pesan: "The dungeon whispers: 'Choose a valid path (1–5)!'" Ini memastikan pengguna hanya memilih opsi yang tersedia.
 ```bash
 // dungeon.c
 void main_menu(Player *p) {
@@ -572,5 +577,122 @@ void main_menu(Player *p) {
                 break;
         }
     }
+}
+```
+
+    2. Toko Senjata (Error Handling untuk Pembelian)
+        - Input Tidak Valid: Jika input bukan angka, sscanf gagal, dan pesan kesalahan ditampilkan: "Invalid input. Please enter a number (0–5)."
+        - Pilihan Tidak Valid: Fungsi buy_weapon mengembalikan kode kesalahan: -1: ID senjata tidak valid (bukan 1–5), -2: Gold tidak cukup, 3: Senjata sudah dimiliki., dan Lainnya: Inventaris penuh.
+        - Setiap kasus menampilkan pesan spesifik untuk membantu pengguna memahami kesalahan.
+```bash
+// shop.c
+void display_shop(Player *p) {
+    char input[10];
+    int choice;
+    printf(ANSI_PURPLE "┌─────────────────────────────────────────────┐\n" ANSI_RESET);
+    printf(ANSI_PURPLE "│" ANSI_YELLOW "         🛒 MYSTERIOUS ARMORY 🛒             " ANSI_PURPLE "│\n" ANSI_RESET);
+    printf(ANSI_PURPLE "├────┬──────────────────┬──────┬──────┬────────┤\n" ANSI_RESET);
+    printf(ANSI_PURPLE "│" ANSI_CYAN " ID " ANSI_PURPLE "│" ANSI_CYAN " Name             " ANSI_PURPLE "│" ANSI_CYAN " Gold " ANSI_PURPLE "│" ANSI_CYAN " Dmg  " ANSI_PURPLE "│" ANSI_CYAN " Passive" ANSI_PURPLE "│\n" ANSI_RESET);
+    printf(ANSI_PURPLE "├────┼──────────────────┼──────┼──────┼────────┤\n" ANSI_RESET);
+    for (int i = 0; i < WEAPON_COUNT; i++) {
+        Weapon *w = &shop_weapons[i];
+        printf(ANSI_PURPLE "│" ANSI_CYAN " %-2d " ANSI_PURPLE "│" ANSI_GREEN " %-16s " ANSI_PURPLE "│" ANSI_YELLOW " %-4d " ANSI_PURPLE "│" ANSI_RED " %-4d " ANSI_PURPLE "│" ANSI_BLUE " %-6s " ANSI_PURPLE "│\n", 
+               w->id, w->name, w->price, w->damage, w->passive);
+    }
+    printf(ANSI_PURPLE "└────┴──────────────────┴──────┴──────┴────────┘\n" ANSI_RESET);
+    printf(ANSI_YELLOW "💬 The merchant grins: 'Choose wisely, adventurer!'\n" ANSI_RESET);
+    printf(ANSI_CYAN "➤ Enter weapon number to buy (0 to leave): " ANSI_RESET);
+    fgets(input, sizeof(input), stdin);
+    if (sscanf(input, "%d", &choice) != 1) {
+        printf(ANSI_RED "⚠ Invalid input. Please enter a number (0–5).\n" ANSI_RESET);
+        return;
+    }
+    if (choice == 0) {
+        printf(ANSI_YELLOW "💬 The merchant nods: 'Come back anytime!'\n" ANSI_RESET);
+        return;
+    }
+    int result = buy_weapon(p, choice);
+    if (result == 0) {
+        printf(ANSI_GREEN "✅ Successfully bought %s!\n" ANSI_RESET, p->equipped_weapon);
+    } else if (result == -1) {
+        printf(ANSI_RED "⚠ Invalid weapon ID. Choose a number between 1 and 5.\n" ANSI_RESET);
+    } else if (result == -2) {
+        printf(ANSI_RED "⚠ The merchant laughs: 'Not enough gold, hero!'\n" ANSI_RESET);
+    } else if (result == -3) {
+        printf(ANSI_RED "⚠ You already own this weapon!\n" ANSI_RESET);
+    } else {
+        printf(ANSI_RED "⚠ Inventory full! Cannot carry more weapons.\n" ANSI_RESET);
+    }
+}
+```
+
+    3. Inventaris (Error Handling untuk Equip)
+        - Input Tidak Valid: Jika input bukan angka, pesan kesalahan ditampilkan: "Invalid input. Please enter a number."
+        - Pilihan di Luar Rentang: Jika pilihan di luar 0 hingga inventory_size + 1, pesan ditampilkan dengan rentang yang valid.
+        - Senjata Tidak Dimiliki: Jika ID senjata tidak ada di inventaris, pesan ditampilkan: "You don't own that weapon!" atau "Invalid weapon ID."
+```bash
+// dungeon.c
+void view_inventory(Player *p) {
+    char input[10];
+    int choice;
+    printf(ANSI_BLUE "┌─────────────────────────────────────────────┐\n" ANSI_RESET);
+    printf(ANSI_BLUE "│" ANSI_YELLOW "         🎒 HERO'S SATCHEL 🎒               " ANSI_BLUE "│\n" ANSI_RESET);
+    printf(ANSI_BLUE "├────┬──────────────────┬──────────────┤\n" ANSI_RESET);
+    printf(ANSI_BLUE "│" ANSI_CYAN " ID " ANSI_BLUE "│" ANSI_CYAN " Name             " ANSI_BLUE "│" ANSI_CYAN " Status     " ANSI_BLUE "│\n" ANSI_RESET);
+    printf(ANSI_BLUE "├────┼──────────────────┼──────────────┤\n" ANSI_RESET);
+    printf(ANSI_BLUE "│" ANSI_CYAN " 1  " ANSI_BLUE "│" ANSI_GREEN " Fists            " ANSI_BLUE "│" ANSI_YELLOW "%-12s" ANSI_BLUE "│\n", 
+           strcmp(p->equipped_weapon, "Fists") == 0 ? "EQUIPPED" : "");
+    for (int i = 0; i < p->inventory_size; i++) {
+        Weapon *w = get_weapon_by_id(p->inventory[i]);
+        if (w) {
+            printf(ANSI_BLUE "│" ANSI_CYAN " %-2d " ANSI_BLUE "│" ANSI_GREEN " %-16s " ANSI_BLUE "│" ANSI_YELLOW "%-12s" ANSI_BLUE "│\n", 
+                   w->id + 1, w->name, strcmp(p->equipped_weapon, w->name) == 0 ? "EQUIPPED" : 
+                   strlen(w->passive) > 0 ? w->passive : "");
+        }
+    }
+    printf(ANSI_BLUE "└────┴──────────────────┴──────────────┘\n" ANSI_RESET);
+    printf(ANSI_CYAN "➤ Enter number to equip (0 to cancel): " ANSI_RESET);
+    fgets(input, sizeof(input), stdin);
+    if (sscanf(input, "%d", &choice) != 1) {
+        printf(ANSI_RED "⚠ Invalid input. Please enter a number.\n" ANSI_RESET);
+        return;
+    }
+    if (choice == 0) return;
+    if (choice == 1) {
+        strcpy(p->equipped_weapon, "Fists");
+        p->base_damage = 5;
+        printf(ANSI_GREEN "✅ Fists equipped. Ready to brawl!\n" ANSI_RESET);
+    } else if (choice >= 2 && choice <= p->inventory_size + 1) {
+        Weapon *w = get_weapon_by_id(choice - 1);
+        if (w) {
+            for (int i = 0; i < p->inventory_size; i++) {
+                if (p->inventory[i] == w->id) {
+                    strcpy(p->equipped_weapon, w->name);
+                    p->base_damage = w->damage;
+                    printf(ANSI_GREEN "✅ %s equipped!\n" ANSI_RESET, w->name);
+                    return;
+                }
+            }
+            printf(ANSI_RED "⚠ You don't own that weapon!\n" ANSI_RESET);
+        } else {
+            printf(ANSI_RED "⚠ Invalid weapon ID. Choose a valid number.\n" ANSI_RESET);
+        }
+    } else {
+        printf(ANSI_RED "⚠ Invalid choice. Choose a number between 0 and %d.\n" ANSI_RESET, 
+               p->inventory_size + 1);
+    }
+}
+```
+
+    4. Mode Pertempuran (Error Handling untuk Perintah)
+        - Perintah Tidak Valid: Jika pengguna memasukkan selain "attack" atau "exit" (misalnya, "jump" atau kosong), pesan ditampilkan: "Invalid command. Please type 'attack' or 'exit'." Ini memastikan hanya perintah yang valid yang diproses.
+```bash
+if (strcmp(input, "exit") == 0) {
+    printf(ANSI_YELLOW "🏃 You fled into the shadows.\n" ANSI_RESET);
+    return;
+} else if (strcmp(input, "attack") == 0) {
+    // Logika serangan...
+} else {
+    printf(ANSI_RED "⚠ Invalid command. Please type 'attack' or 'exit'.\n" ANSI_RESET);
 }
 ```
