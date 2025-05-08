@@ -39,6 +39,276 @@ f. Program image_server.c diharuskan untuk tidak keluar/terminate saat terjadi e
 
 g. Server menyimpan log semua percakapan antara image_server.c dan image_client.c di dalam file server.log dengan format: [Source][YYYY-MM-DD hh:mm:ss]: [ACTION] [Info]
 
+
+## Soal 2
+[Author: Nayla / naylaarr]
+
+Tahun 2025, di tengah era perdagangan serba cepat, berdirilah sebuah perusahaan ekspedisi baru bernama RushGo. RushGo ingin memberikan layanan ekspedisi terbaik dengan 2 pilihan, Express (super cepat) dan Reguler (standar). Namun, pesanan yang masuk sangat banyak! Mereka butuh sebuah sistem otomatisasi pengiriman, agar agen-agen mereka tidak kewalahan menangani pesanan yang terus berdatangan. Kamu ditantang untuk membangun Delivery Management System untuk RushGo.
+
+### A. Mengunduh File Order dan Menyimpannya ke Shared Memory
+Untuk memulai, Anda perlu mengelola semua orderan yang masuk dengan menggunakan shared memory.
+Unduh file `delivery_order.csv`
+Setelah file CSV diunduh, program Anda harus membaca seluruh data dari CSV dan menyimpannya ke dalam shared memory.
+
+```bash
+void download_file() {
+    pid_t pid = fork();
+    if (pid == 0) {
+        char *args[] = {"wget", (char *)URL, "-O", FILE_NAME, NULL};
+        execvp("wget", args);
+        exit(1);
+    } else {
+        wait(NULL);
+    }
+}
+```
+Fungsi `download_file` menggunakan `fork` untuk membuat proses anak yang menjalankan perintah `wget` untuk mengunduh file CSV dari URL yang diberikan. Setelah proses anak selesai, proses induk menunggu hingga unduhan selesai dengan `wait(NULL)`.
+
+```bash
+
+SharedData* init_shared_memory() {
+    if (!file_exists(FILE_NAME)) {
+        printf("File CSV belum ditemukan. Mengunduh...\n");
+        download_file();
+    }
+
+    int shmid = shmget(SHM_KEY, sizeof(SharedData), 0666);
+    if (shmid == -1 && errno == ENOENT) {
+        printf("Shared memory belum ada. Membuat dan mengisi dari CSV...\n");
+        shmid = shmget(SHM_KEY, sizeof(SharedData), IPC_CREAT | 0666);
+        if (shmid == -1) {
+            perror("Gagal membuat shared memory");
+            exit(1);
+        }
+
+        SharedData *data = (SharedData *) shmat(shmid, NULL, 0);
+        if (data == (void *) -1) {
+            perror("shmat gagal");
+            exit(1);
+        }
+
+        FILE *fp = fopen(FILE_NAME, "r");
+        if (!fp) {
+            perror("Gagal membuka file CSV");
+            exit(1);
+        }
+
+        char line[256];
+        fgets(line, sizeof(line), fp); // skip header
+        data->count = 0;
+
+        while (fgets(line, sizeof(line), fp) && data->count < MAX_ORDERS) {
+            if (sscanf(line, "%[^,],%[^,],%[^\n]",
+                       data->orders[data->count].nama,
+                       data->orders[data->count].alamat,
+                       data->orders[data->count].tipe) == 3) {
+                strcpy(data->orders[data->count].status, "Pending");
+                data->count++;
+            }
+        }
+
+        fclose(fp);
+        return data;
+    } else if (shmid != -1) {
+        SharedData *data = (SharedData *) shmat(shmid, NULL, 0);
+        if (data == (void *) -1) {
+            perror("shmat gagal");
+            exit(1);
+        }
+        return data;
+    } else {
+        perror("shmget gagal");
+        exit(1);
+    }
+}
+```
+Fungsi `init_shared_memory` memeriksa apakah file CSV sudah ada. Jika tidak, ia mengunduhnya menggunakan fungsi `download_file`. Kemudian, ia mencoba untuk mendapatkan ID shared memory dengan `shmget`. Jika shared memory belum ada, ia membuatnya dan mengisi data dari file CSV ke dalam shared memory. Jika shared memory sudah ada, ia hanya mengaitkannya dengan `shmat`.
+
+### B. Pengiriman Bertipe Express
+RushGo memiliki tiga agen pengiriman utama: AGENT A, AGENT B, dan AGENT C.
+Setiap agen dijalankan sebagai thread terpisah.
+Agen-agen ini akan secara otomatis:
+Mencari order bertipe Express yang belum dikirim.
+Mengambil dan mengirimkannya tanpa intervensi user.
+Setelah sukses mengantar, program harus mencatat log di delivery.log dengan format:
+
+`[dd/mm/yyyy hh:mm:ss] [AGENT A/B/C] Express package delivered to [Nama] in [Alamat]`
+
+```bash
+
+void *agent_thread(void *arg) {
+    char *agent_name = (char *) arg;
+
+    int shmid = shmget(SHM_KEY, sizeof(SharedData), 0666);
+    SharedData *data = (SharedData *) shmat(shmid, NULL, 0);
+
+    for (int i = 0; i < data->count; i++) {
+        sem_wait(&sem);
+
+        if (strcmp(data->orders[i].tipe, "Express") == 0 &&
+            strncmp(data->orders[i].status, "Pending", 7) == 0) {
+
+            sprintf(data->orders[i].status, "Delivered by %s", agent_name);
+
+            FILE *log = fopen("delivery.log", "a");
+            if (log) {
+                time_t now = time(NULL);
+                struct tm *t = localtime(&now);
+                fprintf(log, "[%02d/%02d/%04d %02d:%02d:%02d] [%s] Express package delivered to %s in %s\n",
+                    t->tm_mday, t->tm_mon + 1, t->tm_year + 1900,
+                    t->tm_hour, t->tm_min, t->tm_sec,
+                    agent_name,
+                    data->orders[i].nama,
+                    data->orders[i].alamat);
+                fclose(log);
+            }
+
+            sem_post(&sem);
+            sleep(1); // beri delay antar pengiriman
+            continue;
+        }
+
+        sem_post(&sem);
+    }
+
+    shmdt(data);
+    return NULL;
+}
+
+```
+Fungsi `agent_thread` adalah fungsi yang dijalankan oleh setiap thread agen. Setiap agen akan mencari order bertipe Express yang belum dikirim, mengubah statusnya menjadi "Delivered by [Nama Agen]", dan mencatat log pengiriman ke dalam file `delivery.log`. Setelah itu, agen akan tidur selama 1 detik sebelum melanjutkan pencarian order berikutnya.
+### C. Pengiriman Bertipe Reguler
+Berbeda dengan Express, untuk order bertipe Reguler, pengiriman dilakukan secara manual oleh user.
+User dapat mengirim permintaan untuk mengantar order Reguler dengan memberikan perintah deliver dari dispatcher. 
+Penggunaan:
+./dispatcher -deliver [Nama]
+Pengiriman dilakukan oleh agent baru yang namanya adalah nama user.
+Setelah sukses mengantar, program harus mencatat log di delivery.log dengan format:
+[dd/mm/yyyy hh:mm:ss] [AGENT <user>] Reguler package delivered to [Nama] in [Alamat] 
+
+```bash
+void deliverReg(char *nama, SharedData *shared_data) {
+    char *agent_name = getenv("USER");
+    int found = 0;
+    for (int i = 0; i < shared_data->count; i++) {
+        if(strcmp(shared_data->orders[i].nama, nama) ==0 ) {
+            if (strcmp(shared_data->orders[i].tipe, "Reguler") != 0) {
+                printf("%s❌ Order %s bukan bertipe Reguler! Harap periksa kembali tipe order.%s\n", RED, nama, RESET);
+                return;
+            }
+
+            if (strncmp(shared_data->orders[i].status, "Pending", 7) != 0) {
+                printf("%s⚠️  Order %s has already been marked as %s%s. No further action is required.%s\n", YELLOW, nama, shared_data->orders[i].status, YELLOW, RESET);
+                return;
+            }
+
+            strcpy(shared_data->orders[i].status, "Delivered");
+            found = 1;
+            sprintf(shared_data->orders[i].status, "Delivered by AGENT %s", agent_name);
+
+            FILE *log = fopen("delivery.log", "a");
+            if (log) {
+                time_t now = time(NULL);
+                struct tm *t = localtime(&now);
+                fprintf(log, "[%02d/%02d/%04d %02d:%02d:%02d] [AGENT %s] Reguler package delivered to %s in %s\n",
+                    t->tm_mday, t->tm_mon + 1, t->tm_year + 1900,
+                    t->tm_hour, t->tm_min, t->tm_sec,
+                    agent_name,
+                    shared_data->orders[i].nama,
+                    shared_data->orders[i].alamat);
+                fclose(log);
+                printf("%s✈️  Order %s has been %sDELIVERED%s successfully! %s📦%s\n", GREEN, nama, CYAN, GREEN, ORANGE, RESET);
+
+                break;
+            }
+        }
+    }
+}
+```
+Fungsi `deliverReg` digunakan untuk mengirimkan order bertipe Reguler secara manual oleh user. Fungsi ini mencari order berdasarkan nama yang diberikan, memeriksa apakah order tersebut bertipe Reguler dan belum dikirim, lalu mengubah statusnya menjadi "Delivered by AGENT [Nama User]". Setelah itu, fungsi mencatat log pengiriman ke dalam file `delivery.log`.
+
+Jika order tidak ditemukan atau sudah dikirim, fungsi akan memberikan pesan kesalahan yang sesuai.
+
+### D. Mengecek Status Pesanan
+Dispatcher juga harus bisa mengecek status setiap pesanan.
+Penggunaan:
+
+`./dispatcher -status [Nama]`
+```bash
+void statusShipment(char *nama, SharedData *shared_data) {
+    for (int i = 0; i < shared_data->count; i++) {
+        if (strcmp(shared_data->orders[i].nama, nama) == 0) {
+            printf("%s┌──────────────────────────────────────────────────────────────┐%s\n", CYAN, RESET);
+            printf("%s│%s                      %-18s%s                   │%s\n", CYAN, GREEN, "📦 Shipment Status 📦", CYAN, RESET);
+            printf("%s├──────────────────────────────────────────────────────────────┤%s\n", CYAN, RESET);
+            printf("%s│%s %-20s: %-38s %s│%s\n", CYAN, RESET, "Customer Name", shared_data->orders[i].nama, CYAN, RESET);
+            printf("%s│%s %-20s: %-38s %s│%s\n", CYAN, RESET, "Address", shared_data->orders[i].alamat, CYAN, RESET);
+            const char *type_color = (strcmp(shared_data->orders[i].tipe, "Express") == 0) ? BLUE : ORANGE;
+            printf("%s│%s %-20s: %s%-38s%s %s│%s\n", CYAN, RESET, "Order Type", type_color, shared_data->orders[i].tipe, RESET, CYAN, RESET);
+            const char *status_color = (strcmp(shared_data->orders[i].status, "Pending") == 0) ? RED : GREEN;
+            printf("%s│%s %-20s: %s%-38s%s %s│%s\n", CYAN, RESET, "Status", status_color, shared_data->orders[i].status, RESET, CYAN, RESET);
+            printf("%s└──────────────────────────────────────────────────────────────┘%s\n", CYAN, RESET);
+            return;
+        }
+    }
+    printf("Order %s Not Found\n", nama);
+} 
+```
+Fungsi `statusShipment` digunakan untuk mengecek status pesanan berdasarkan nama yang diberikan. Fungsi ini mencari order dalam shared memory dan menampilkan informasi pesanan seperti nama pelanggan, alamat, tipe order, dan status pengiriman. Jika order tidak ditemukan, fungsi akan memberikan pesan bahwa order tidak ditemukan.
+### E. Melihat Daftar Semua Pesanan
+Untuk memudahkan monitoring, program dispatcher bisa menjalankan perintah list untuk melihat semua order disertai nama dan statusnya.
+Penggunaan:
+
+`./dispatcher -list`
+
+
+```bash
+void printTable(SharedData *shared_data) {
+    printf("%s┌──────────────────────────────────────────────────────────────────────────────────────────┐%s\n", CYAN, RESET);  
+    printf("%s│                                                                                          │%s\n", CYAN, RESET);
+    printf("%s│       %s██████╗ ██╗   ██╗███████╗██╗  ██╗ ██████╗  ██████╗     %s███████╗██╗  ██╗██████╗     %s│%s\n", CYAN, YELLOW, ORANGE, CYAN, RESET);
+    printf("%s│       %s██╔══██╗██║   ██║██╔════╝██║  ██║██╔════╝ ██╔═══██╗    %s██╔════╝╚██╗██╔╝██╔══██╗    %s│%s\n", CYAN, YELLOW, ORANGE, CYAN, RESET);
+    printf("%s│       %s██████╔╝██║   ██║███████╗███████║██║  ███╗██║   ██║    %s█████╗   ╚███╔╝ ██████╔╝    %s│%s\n", CYAN, YELLOW, ORANGE, CYAN, RESET);
+    printf("%s│       %s██╔══██╗██║   ██║╚════██║██╔══██║██║   ██║██║   ██║    %s██╔══╝   ██╔██╗ ██╔═══╝     %s│%s\n", CYAN, YELLOW, ORANGE, CYAN, RESET);
+    printf("%s│       %s██║  ██║╚██████╔╝███████║██║  ██║╚██████╔╝╚██████╔╝    %s███████╗██╔╝ ██╗██║         %s│%s\n", CYAN, YELLOW, ORANGE, CYAN, RESET);
+    printf("%s│       %s╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝  ╚═════╝     %s╚══════╝╚═╝  ╚═╝╚═╝         %s│%s\n", CYAN, YELLOW, ORANGE, CYAN, RESET);
+    printf("%s│                                                                                          │%s\n", CYAN, RESET);
+    printf("%s└──────────────────────────────────────────────────────────────────────────────────────────┘%s\n", CYAN, RESET);
+
+    printf("%s┌────┬────────────────────┬────────────────────┬──────────┬────────────────────────────────┐%s\n", CYAN, RESET);
+    printf("│ No │ %-18s │ %-18s │ %-8s │ %-30s │\n", "Nama", "Alamat", "Tipe", "Status");
+    printf("%s├────┼────────────────────┼────────────────────┼──────────┼────────────────────────────────┤%s\n", CYAN, RESET);
+
+    for (int i = 0; i < shared_data->count; i++) {
+        const char *status_color = (strcmp(shared_data->orders[i].status, "Pending") == 0) ? RED : GREEN;
+        printf("%s│%s %2d %s│%s %-18s %s│%s %-18s %s│%s %-8s %s│%s %s%-30s%s %s│%s\n",
+               CYAN, RESET, i + 1, CYAN, RESET,
+               shared_data->orders[i].nama, CYAN, RESET,
+               shared_data->orders[i].alamat, CYAN, RESET,
+               shared_data->orders[i].tipe, CYAN, RESET,
+               status_color, shared_data->orders[i].status, RESET, CYAN, RESET);
+        }
+
+    printf("%s└────┴────────────────────┴────────────────────┴──────────┴────────────────────────────────┘%s\n", CYAN, RESET);
+    printf("Total: %d order %s📝\n", shared_data->count, CYAN);
+}
+```
+Fungsi `printTable` digunakan untuk menampilkan semua order dalam bentuk tabel. Fungsi ini mencetak header tabel, lalu mengiterasi semua order dalam shared memory dan mencetak informasi masing-masing order. Tipe dan status order diberi warna yang sesuai untuk memudahkan pembacaan.
+
+### Menghentikan Program 
+Menggunakan Command ./dispatcher -rm akan menghapus shared memory dan semaphore yang telah dibuat sebelumnya
+```bash
+void delshm(){
+    int shmid = shmget(SHM_KEY, 0, 0666);
+    shmctl(shmid, IPC_RMID, NULL);
+        printf("Shared memory deleted\n");
+        exit(0);
+
+}
+```
+Fungsi `delshm` digunakan untuk menghapus shared memory yang telah dibuat sebelumnya. Fungsi ini mendapatkan ID shared memory dengan `shmget`, lalu menghapusnya dengan `shmctl`. Setelah itu, program akan keluar.
+
+
 ## Soal 3
 [Author: Fico / purofuro]
 
