@@ -177,6 +177,9 @@ void *agent_thread(void *arg) {
 
 ```
 Fungsi `agent_thread` adalah fungsi yang dijalankan oleh setiap thread agen. Setiap agen akan mencari order bertipe Express yang belum dikirim, mengubah statusnya menjadi "Delivered by [Nama Agen]", dan mencatat log pengiriman ke dalam file `delivery.log`. Setelah itu, agen akan tidur selama 1 detik sebelum melanjutkan pencarian order berikutnya.
+
+![Image](https://github.com/user-attachments/assets/91e76fa6-e21b-4930-8d62-d9e435ca687b)
+
 ### C. Pengiriman Bertipe Reguler
 Berbeda dengan Express, untuk order bertipe Reguler, pengiriman dilakukan secara manual oleh user.
 User dapat mengirim permintaan untuk mengantar order Reguler dengan memberikan perintah deliver dari dispatcher. 
@@ -229,6 +232,8 @@ Fungsi `deliverReg` digunakan untuk mengirimkan order bertipe Reguler secara man
 
 Jika order tidak ditemukan atau sudah dikirim, fungsi akan memberikan pesan kesalahan yang sesuai.
 
+![Image](https://github.com/user-attachments/assets/3556e68b-0e5c-4f28-aa72-ac6d574b0dde)
+
 ### D. Mengecek Status Pesanan
 Dispatcher juga harus bisa mengecek status setiap pesanan.
 Penggunaan:
@@ -255,6 +260,9 @@ void statusShipment(char *nama, SharedData *shared_data) {
 } 
 ```
 Fungsi `statusShipment` digunakan untuk mengecek status pesanan berdasarkan nama yang diberikan. Fungsi ini mencari order dalam shared memory dan menampilkan informasi pesanan seperti nama pelanggan, alamat, tipe order, dan status pengiriman. Jika order tidak ditemukan, fungsi akan memberikan pesan bahwa order tidak ditemukan.
+
+![Image](https://github.com/user-attachments/assets/d7e40b81-8a44-4189-925a-e999b9575b21)
+
 ### E. Melihat Daftar Semua Pesanan
 Untuk memudahkan monitoring, program dispatcher bisa menjalankan perintah list untuk melihat semua order disertai nama dan statusnya.
 Penggunaan:
@@ -295,6 +303,8 @@ void printTable(SharedData *shared_data) {
 ```
 Fungsi `printTable` digunakan untuk menampilkan semua order dalam bentuk tabel. Fungsi ini mencetak header tabel, lalu mengiterasi semua order dalam shared memory dan mencetak informasi masing-masing order. Tipe dan status order diberi warna yang sesuai untuk memudahkan pembacaan.
 
+![Image](https://github.com/user-attachments/assets/a264016c-d9b4-4a56-a46a-7960221a0449)
+
 ### Menghentikan Program 
 Menggunakan Command ./dispatcher -rm akan menghapus shared memory dan semaphore yang telah dibuat sebelumnya
 ```bash
@@ -308,6 +318,7 @@ void delshm(){
 ```
 Fungsi `delshm` digunakan untuk menghapus shared memory yang telah dibuat sebelumnya. Fungsi ini mendapatkan ID shared memory dengan `shmget`, lalu menghapusnya dengan `shmctl`. Setelah itu, program akan keluar.
 
+![Image](https://github.com/user-attachments/assets/4179e894-f792-4993-a1ef-c358a0b89792)
 
 ## Soal 3
 [Author: Fico / purofuro]
