@@ -16,28 +16,295 @@ Sekarang tahun 2045, seluruh dunia mengalami kekacauan dalam segala infrastruktu
 Hanya sedikit yang diketahui tentang hacker bernama “rootkids”. Beberapa informasi yang anda temukan dari deep web hanyalah berupa beberapa file text yang berisi tulisan aneh, beserta beberapa petunjuk untuk mengubah text tersebut menjadi sebuah file jpeg.
 Karena anda adalah seorang professional programmer, anda mengikuti petunjuk yang anda dapatkan dari deep web untuk membuat sistem RPC server-client untuk mengubah text file sehingga bisa dilihat dalam bentuk file jpeg. Situs deep web yang anda baca terlihat sebagai berikut.
 
-a. Text file rahasia terdapat pada [LINK BERIKUT](https://drive.google.com/file/d/15mnXpYUimVP1F5Df7qd_Ahbjor3o1cVw/view), diperbolehkan untuk download/unzip secara manual. 
+### a. Text file rahasia terdapat pada [LINK BERIKUT](https://drive.google.com/file/d/15mnXpYUimVP1F5Df7qd_Ahbjor3o1cVw/view), diperbolehkan untuk download/unzip secara manual. 
+
+Sebelum mendownload dan mengunzip file, buat fungsi untuk memastikan bahwa direktori client/secrets tempat menaruh hasil unzip telah tersedia. Dalam hal ini menggunakan fungsi `ensure_directory_structure`
+
+```bash
+void ensure_directory_structure() {
+    struct stat st = {0};
+
+    // Cek apakah 'client' ada dan merupakan direktori
+    if (stat("client", &st) == 0) {
+        if (!S_ISDIR(st.st_mode)) {
+            printf("Error: 'client' adalah file, bukan folder. Harap hapus file tersebut.\n");
+            exit(1);
+        }
+    } else {
+        mkdir("client", 0755);
+    }
+
+    // Buat 'client/secrets' jika belum ada
+    if (stat("client/secrets", &st) == -1) {
+        mkdir("client/secrets", 0755);
+    }
+}
+```
+
+Untuk mendownload file dan mengunzip file, dilakukan secara otomatis saat program image_client.c dijalankan
+
+```bash
+    ensure_directory_structure();
+
+    system("curl -L -o secrets.zip \"https://drive.usercontent.google.com/u/0/uc?id=15mnXpYUimVP1F5Df7qd_Ahbjor3o1cVw&export=download\"");
+    system("unzip -o secrets.zip -d client");
+    system("rm secrets.zip");
+```
+
+### b. Pada image_server.c, program yang dibuat harus berjalan secara daemon di background dan terhubung dengan image_client.c melalui socket RPC.
+
+Berikut adalah code untuk membaca pesan dari image_client.c dan juga memasukkannya ke dalam activity log
+
+```bash
+        read(client_fd, buffer, action_len); buffer[action_len] = '\0';
+        char log_action[64]; strcpy(log_action, buffer);
+        read(client_fd, &info_len, sizeof(int));
+        read(client_fd, buffer, info_len); buffer[info_len] = '\0';
+        char log_info[256]; strcpy(log_info, buffer);
+        log_msg("Client", log_action, log_info);
+```
 
 
-b. Pada image_server.c, program yang dibuat harus berjalan secara daemon di background dan terhubung dengan image_client.c melalui socket RPC.
-
-c. Program image_client.c harus bisa terhubung dengan image_server.c dan bisa mengirimkan perintah untuk:
+### c. Program image_client.c harus bisa terhubung dengan image_server.c dan bisa mengirimkan perintah untuk:
 Decrypt text file yang dimasukkan dengan cara Reverse Text lalu Decode from Hex, untuk disimpan dalam folder database server dengan nama file berupa timestamp dalam bentuk angka, misalnya: database/1744401282.jpeg
 Request download dari database server sesuai filename yang dimasukkan, misalnya: 1744401282.jpeg
-*Note: tidak diperbolehkan copy/pindah file, gunakan RPC untuk mengirim data.*
+**Note: tidak diperbolehkan copy/pindah file, gunakan RPC untuk mengirim data.**
 
-d. Program image_client.c harus disajikan dalam bentuk menu kreatif yang memperbolehkan pengguna untuk memasukkan perintah berkali-kali.
+Untuk memulai decrypt file terlebih dahulu membuat fungsi untuk reverse dan decode dari hex. Untuk itu kami menggunakan fungsi `reverse_and_decode()`
 
-e. Program dianggap berhasil bila pengguna dapat mengirimkan text file dan menerima sebuah file jpeg yang dapat dilihat isinya.
+```bash
+    char* reverse_and_decode(const char* input, size_t* out_len) {
+    int len = strlen(input);
+    if (len % 2 != 0) return NULL;
+    char* reversed = malloc(len + 1);
+    if(!reversed){
+        perror("malloc reversed failed");
+        return NULL;
+    }
+    for (int i = 0; i < len; i++) reversed[i] = input[len - 1 - i];
+    reversed[len] = '\0';
+    char* output = malloc(len / 2);
+    if(!output){
+        perror("malloc output failed");
+        free(reversed);
+        return NULL;
+    }
+    for (int i = 0; i < len / 2; i++) sscanf(&reversed[i * 2], "%2hhx", &output[i]);
+    *out_len = len / 2;
+    free(reversed);
+    return output;
+}
+```
 
-f. Program image_server.c diharuskan untuk tidak keluar/terminate saat terjadi error dan client akan menerima error message sebagai response, yang meliputi minimal:
-    - Dari Client:
-        Gagal connect ke server
-        Salah nama text file input
-    - Dari Server:
-        Gagal menemukan file untuk dikirim ke client
+Fungsi untuk menyimpan file melakukan fetch sehingga yang tersimpan di dalam `client/secrets` adalah nama file yang sudah terdecrypt.
 
-g. Server menyimpan log semua percakapan antara image_server.c dan image_client.c di dalam file server.log dengan format: [Source][YYYY-MM-DD hh:mm:ss]: [ACTION] [Info]
+```bash
+ void store_file(const char *filename) {
+    char path[256];
+    snprintf(path, sizeof(path), "client/secrets/%s", filename);
+    FILE *fp = fopen(path, "r");
+    if (!fp) {
+        printf("File '%s' tidak ditemukan.\n", filename);
+        return;
+    }
+    char *content = malloc(BUF_SIZE);
+    int len = fread(content, 1, BUF_SIZE, fp);
+    fclose(fp); content[len] = '\0';
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in serv_addr = { .sin_family = AF_INET, .sin_port = htons(PORT), .sin_addr.s_addr = inet_addr("127.0.0.1") };
+    if (connect(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
+        printf("Gagal connect ke server.\n"); return;
+    }
+    int command = 1;
+    write(sockfd, &command, sizeof(int));
+    send_log(sockfd, "DECRYPT", "Text data");
+    write(sockfd, &len, sizeof(int));
+    write(sockfd, content, len);
+    char response[256];
+    int n = read(sockfd, response, sizeof(response));
+    if(n <= 0){
+        printf("Error: Tidak ada respons dari server\n");
+        close(sockfd);
+        return;
+    }
+    response[n] = '\0';
+    printf("Server menyimpan sebagai: %s\n", response);
+    close(sockfd);
+    free(content);
+}
+
+void fetch_file(const char *filename) {
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in serv_addr = { .sin_family = AF_INET, .sin_port = htons(PORT), .sin_addr.s_addr = inet_addr("127.0.0.1") };
+    if (connect(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
+        printf("Gagal connect ke server.\n"); return;
+    }
+    int command = 2;
+    write(sockfd, &command, sizeof(int));
+    send_log(sockfd, "DOWNLOAD", filename);
+    int len = strlen(filename);
+    write(sockfd, &len, sizeof(int));
+    write(sockfd, filename, len);
+    int file_len;
+    read(sockfd, &file_len, sizeof(int));
+    if (file_len == -1) {
+        printf("Error: File '%s' tidak ditemukan di server.\n", filename);
+        close(sockfd);
+        return;
+    }
+    char *buffer = malloc(file_len);
+    read(sockfd, buffer, file_len);
+    char path[256];
+    snprintf(path, sizeof(path), "client/%s", filename);
+    FILE *fp = fopen(path, "wb");
+    fwrite(buffer, 1, file_len, fp); fclose(fp);
+    printf("File disimpan sebagai %s\n", path);
+    free(buffer); close(sockfd);
+}
+
+
+```
+
+### d. Program image_client.c harus disajikan dalam bentuk menu kreatif yang memperbolehkan pengguna untuk memasukkan perintah berkali-kali.
+
+Kondisi pengulangan program secara default adalah benar, yang mana mengizinkan program terus berjalan sebelum user memanggil program untuk berhenti
+
+```bash
+ while (1) {
+        printf("\n====Image Decoder Client=====\n");
+        printf("1. Send input file to server\n");
+        printf("2. Download file from server\n");
+        printf("3. Exit\n");
+        printf(">> ");
+        int choice;
+        scanf("%d", &choice);
+        char filename[256];
+        if (choice == 1) {
+            printf("Masukkan nama file (input_X.txt): ");
+            scanf("%s", filename);
+            store_file(filename);
+        } else if (choice == 2) {
+            printf("Masukkan nama file jpeg (timestamp.jpeg): ");
+            scanf("%s", filename);
+            fetch_file(filename);
+        } else if (choice == 3) {
+            int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+            struct sockaddr_in serv_addr = { .sin_family = AF_INET, .sin_port = htons(PORT), .sin_addr.s_addr = inet_addr("127.0.0.1") };
+            if (connect(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
+                printf("Error: Server gagal dihubungi.\n");
+                return 0;
+            }
+            int command = 3;
+            write(sockfd, &command, sizeof(int));
+            send_log(sockfd, "EXIT", "Client requested to exit");
+            close(sockfd);
+            break;
+        }
+    }
+
+```
+
+### e. Program dianggap berhasil bila pengguna dapat mengirimkan text file dan menerima sebuah file jpeg yang dapat dilihat isinya.
+
+Server akan menyimpan file `txt` dari client di dalam database dengan format nama `timestamp.jpeg`. Sementara Untuk perintah no. 2 adalah untuk mendownload serta menampilkan file `jpeg` ke client.
+
+```bash
+  if (command == 1) {
+            int text_len;
+            read(client_fd, &text_len, sizeof(int));
+            read(client_fd, buffer, text_len); buffer[text_len] = '\0';
+            size_t out_len;
+            char* decoded = reverse_and_decode(buffer, &out_len);
+            if (!decoded) {
+                write(client_fd, "ERROR", 5); close(client_fd); continue;
+            }
+            time_t t = time(NULL);
+            char filename[64]; snprintf(filename, sizeof(filename), "%ld.jpeg", t);
+            char path[128]; snprintf(path, sizeof(path), "server/database/%s", filename);
+            FILE *fp = fopen(path, "wb");
+            fwrite(decoded, 1, out_len, fp); fclose(fp);
+            free(decoded);
+            write(client_fd, filename, strlen(filename));
+            log_msg("Server", "SAVE", filename);
+        } else if (command == 2) {
+            int name_len;
+            read(client_fd, &name_len, sizeof(int));
+            read(client_fd, buffer, name_len); buffer[name_len] = '\0';
+            char buffer[100];
+            char filepath[128]; 
+            snprintf(filepath, sizeof(filepath), "server/database/%s", buffer);
+            FILE *fp = fopen(filepath, "rb");
+            if (!fp) { int err = -1; write(client_fd, &err, sizeof(int)); close(client_fd); continue; }
+            int file_len = fread(buffer, 1, BUF_SIZE, fp); fclose(fp);
+            write(client_fd, &file_len, sizeof(int));
+            write(client_fd, buffer, file_len);
+            log_msg("Server", "UPLOAD", buffer);
+        } else if (command == 3) {
+            log_msg("Server", "EXIT", "Client requested to exit");
+        }
+        close(client_fd);
+    }
+
+```
+
+### f. Program `image_server.c` diharuskan untuk tidak keluar/terminate saat terjadi error dan client akan menerima error message sebagai response, yang meliputi minimal:
+
+| Sumber      | Error                                      |
+|-------------|--------------------------------------------|
+| Client      | Gagal connect ke server                    |
+| Client      | Salah nama text file input                 |
+| Server      | Gagal menemukan file untuk dikirim ke client |
+
+Berikut beberapa error handling yang telah dibuat:
+
+```bash
+ //Error handling dalam client
+    FILE *fp = fopen(path, "r");
+    if (!fp) {
+        printf("File '%s' tidak ditemukan.\n", filename);
+        return;
+    }
+===============================================
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in serv_addr = { .sin_family = AF_INET, .sin_port = htons(PORT), .sin_addr.s_addr = inet_addr("127.0.0.1") };
+    if (connect(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
+        printf("Gagal connect ke server.\n"); return;
+    }
+```
+
+```bash
+//Error handling dalam server
+ int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+ int file_len;
+    read(sockfd, &file_len, sizeof(int));
+    if (file_len == -1) {
+        printf("Error: File '%s' tidak ditemukan di server.\n", filename);
+        close(sockfd);
+        return;
+    }
+
+```
+
+
+### g. Server menyimpan log semua percakapan antara image_server.c dan image_client.c di dalam file server.log dengan format: [Source][YYYY-MM-DD hh:mm:ss]: [ACTION] [Info]
+
+Fungsi untuk membuat log sesuai template:
+
+```bash
+void log_msg(const char *source, const char *action, const char *info) {
+    FILE *f = fopen("server/server.log", "a");
+    if (f) {
+        time_t t = time(NULL);
+        struct tm *tm_info = localtime(&t);
+        char timestamp[20];
+        strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", tm_info);
+        fprintf(f, "[%s][%s]: [%s] [%s]\n", source, timestamp, action, info);
+        fclose(f);
+    } else {
+        perror("fopen log_msg failed");
+    }
+}
+```
 
 
 ## Soal 2
