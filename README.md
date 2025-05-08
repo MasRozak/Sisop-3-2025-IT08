@@ -8,6 +8,55 @@ Anggota IT08:
 | Nadia Fauziazahra Kusumastuti | 5027241094 |
 ----
 
+## Soal 1
+[Author: Amoes / wintertia]
+
+The Legend of Rootkids
+Sekarang tahun 2045, seluruh dunia mengalami kekacauan dalam segala infrastruktur siber. Sebagai seorang mahasiswa Departemen Teknologi Informasi ITS, anda memiliki ide untuk kembali ke masa lalu (tahun 2025) untuk memanggil hacker asal Semarang bernama “rootkids” yang mampu melawan segala hacker lain. Tetapi anda tidak tahu bagaimana cara mencapainya.
+Hanya sedikit yang diketahui tentang hacker bernama “rootkids”. Beberapa informasi yang anda temukan dari deep web hanyalah berupa beberapa file text yang berisi tulisan aneh, beserta beberapa petunjuk untuk mengubah text tersebut menjadi sebuah file jpeg.
+Karena anda adalah seorang professional programmer, anda mengikuti petunjuk yang anda dapatkan dari deep web untuk membuat sistem RPC server-client untuk mengubah text file sehingga bisa dilihat dalam bentuk file jpeg. Situs deep web yang anda baca terlihat sebagai berikut.
+
+a. Text file rahasia terdapat pada [LINK BERIKUT](https://drive.google.com/file/d/15mnXpYUimVP1F5Df7qd_Ahbjor3o1cVw/view), diperbolehkan untuk download/unzip secara manual. Contoh working directory setelah semuanya selesai akan terlihat sebagai berikut:
+.
+├── client
+│   ├── 1744403652.jpeg
+│   ├── 1744403687.jpeg
+│   ├── image_client
+│   └── secrets
+│       ├── input_1.txt
+│       ├── input_2.txt
+│       ├── input_3.txt
+│       ├── input_4.txt
+│       └── input_5.txt
+├── image_client.c
+├── image_server.c
+└── server
+    ├── database
+    │   ├── 1744403652.jpeg
+    │   └── 1744403687.jpeg
+    ├── image_server
+    └── server.log
+
+b. Pada image_server.c, program yang dibuat harus berjalan secara daemon di background dan terhubung dengan image_client.c melalui socket RPC.
+
+c. Program image_client.c harus bisa terhubung dengan image_server.c dan bisa mengirimkan perintah untuk:
+Decrypt text file yang dimasukkan dengan cara Reverse Text lalu Decode from Hex, untuk disimpan dalam folder database server dengan nama file berupa timestamp dalam bentuk angka, misalnya: database/1744401282.jpeg
+Request download dari database server sesuai filename yang dimasukkan, misalnya: 1744401282.jpeg
+*Note: tidak diperbolehkan copy/pindah file, gunakan RPC untuk mengirim data.*
+
+d. Program image_client.c harus disajikan dalam bentuk menu kreatif yang memperbolehkan pengguna untuk memasukkan perintah berkali-kali.
+
+e. Program dianggap berhasil bila pengguna dapat mengirimkan text file dan menerima sebuah file jpeg yang dapat dilihat isinya.
+
+f. Program image_server.c diharuskan untuk tidak keluar/terminate saat terjadi error dan client akan menerima error message sebagai response, yang meliputi minimal:
+    - Dari Client:
+        Gagal connect ke server
+        Salah nama text file input
+    - Dari Server:
+        Gagal menemukan file untuk dikirim ke client
+
+g. Server menyimpan log semua percakapan antara image_server.c dan image_client.c di dalam file server.log dengan format: [Source][YYYY-MM-DD hh:mm:ss]: [ACTION] [Info]
+
 ## Soal 3
 [Author: Fico / purofuro]
 
