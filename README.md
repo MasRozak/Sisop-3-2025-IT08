@@ -16,26 +16,8 @@ Sekarang tahun 2045, seluruh dunia mengalami kekacauan dalam segala infrastruktu
 Hanya sedikit yang diketahui tentang hacker bernama “rootkids”. Beberapa informasi yang anda temukan dari deep web hanyalah berupa beberapa file text yang berisi tulisan aneh, beserta beberapa petunjuk untuk mengubah text tersebut menjadi sebuah file jpeg.
 Karena anda adalah seorang professional programmer, anda mengikuti petunjuk yang anda dapatkan dari deep web untuk membuat sistem RPC server-client untuk mengubah text file sehingga bisa dilihat dalam bentuk file jpeg. Situs deep web yang anda baca terlihat sebagai berikut.
 
-a. Text file rahasia terdapat pada [LINK BERIKUT](https://drive.google.com/file/d/15mnXpYUimVP1F5Df7qd_Ahbjor3o1cVw/view), diperbolehkan untuk download/unzip secara manual. Contoh working directory setelah semuanya selesai akan terlihat sebagai berikut:
-.
-├── client
-│   ├── 1744403652.jpeg
-│   ├── 1744403687.jpeg
-│   ├── image_client
-│   └── secrets
-│       ├── input_1.txt
-│       ├── input_2.txt
-│       ├── input_3.txt
-│       ├── input_4.txt
-│       └── input_5.txt
-├── image_client.c
-├── image_server.c
-└── server
-    ├── database
-    │   ├── 1744403652.jpeg
-    │   └── 1744403687.jpeg
-    ├── image_server
-    └── server.log
+a. Text file rahasia terdapat pada [LINK BERIKUT](https://drive.google.com/file/d/15mnXpYUimVP1F5Df7qd_Ahbjor3o1cVw/view), diperbolehkan untuk download/unzip secara manual. 
+
 
 b. Pada image_server.c, program yang dibuat harus berjalan secara daemon di background dan terhubung dengan image_client.c melalui socket RPC.
 
